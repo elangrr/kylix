@@ -1,0 +1,24 @@
+# Optional gnomcp profiles.toml example for Kylix on onyx-1.
+#
+# gnomcp ships with a built-in `testnet` profile pointing at onyx-1, so you do
+# NOT need this file for read-only queries or when passing `master_address`
+# directly to `gno_session_propose`.
+#
+# Use this file (copied to ./profiles.toml or ~/.config/gnomcp/profiles.toml,
+# or passed via `gnomcp -config <path>`) if you want a persisted `master-address`
+# and tighter default session limits for Kylix settlements.
+#
+# NOTE: Overriding a built-in profile name (like [testnet]) in profiles.toml is
+# a whole-profile replacement in gnomcp, so every endpoint must be listed.
+# Using a distinct name ([onyx-kylix]) avoids replacing the built-in [testnet].
+
+[onyx-kylix]
+rpc-url             = "https://rpc.onyx.testnets.gno.land:443"
+chain-id            = "onyx-1"
+gnoweb-url          = "https://onyx.testnets.gno.land"
+tx-indexer-url      = "https://indexer.onyx.testnets.gno.land/graphql/query"
+faucet-service-url  = "https://faucet-agent.onyx.testnets.gno.land"
+# Replace with your PUBLIC g1... account address (never a private key or mnemonic).
+master-address      = "g1replacewithyourpublicaddress00000000000000"
+default-spend-limit = "50000000ugnot"
+default-expires-in  = "1h"
