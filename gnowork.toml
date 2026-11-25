@@ -1,0 +1,20 @@
+gno = "0.9"
+modules = [
+	"./p/ring",
+	"./r/kylix",
+	"./r/kylixdemo",
+	# Adapters for existing collections. They import third-party realms that
+	# are not in this repo: `make deps` fetches them from the testnet.
+	"./r/adapters/nsnft",
+	"./r/adapters/sinopia3",
+	"./r/adapters/adaptertest", # test only, never deployed
+	# Test-only stand-ins, never deployed.
+	"./r/mocks/hostile",
+	"./r/mocks/legacy721",
+	"./r/mocks/legacyadapter",
+	"./r/mocks/storagebomb",
+	"./r/mocks/sinopiaengine/living",
+	"./r/mocks/sinopiaengine/plain",
+	"./r/mocks/gnoswap/pool", # at the real import path gno.land/r/gnoswap/pool
+	"./r/mocks/gnoswap/router", # at the real import path gno.land/r/gnoswap/router
+]

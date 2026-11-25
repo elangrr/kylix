@@ -1,0 +1,4 @@
+# Module cache for dependencies fetched from the testnet (make deps).
+.gnohome/
+# Local demo chain: throwaway keys, logs, copied dependencies (scripts/local-demo.sh).
+.local-demo/
