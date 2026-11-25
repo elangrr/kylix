@@ -4,3 +4,5 @@
 .local-demo/
 # Staged copies for deployment (scripts/stage.sh).
 .deploy/
+# Testnet rehearsal logs and state (scripts/testnet-rehearsal.sh).
+.testnet-rehearsal/
