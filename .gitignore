@@ -2,3 +2,5 @@
 .gnohome/
 # Local demo chain: throwaway keys, logs, copied dependencies (scripts/local-demo.sh).
 .local-demo/
+# Staged copies for deployment (scripts/stage.sh).
+.deploy/
