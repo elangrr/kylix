@@ -4,6 +4,8 @@
 
 Built for the Gnome Tavern Hackathon. The name is the Greek cup that was passed round the circle at a drinking party.
 
+**Web app:** https://elangrr.github.io/kylix/ tells the idea as a scrolling story and has the trading app at [/app](https://elangrr.github.io/kylix/app).
+
 **Live on the Gno.land testnet (onyx-1):** https://onyx.testnets.gno.land/r/nym-kylix000/kylix
 
 ![A ring of three offers, one of them swapped through GnoSwap](docs/img/ring.svg)
@@ -31,6 +33,7 @@ Whoever settles a ring receives the storage deposits that its offers and approva
 | `r/kylixdemo` | Two demo tokens and a demo collection with a faucet, so a newcomer can trade in two minutes. |
 | `r/adapters` | Adapters that let existing collections trade without redeploying: Sinopia3 artworks and MNS names. |
 | `r/mocks` | Test-only stand-ins, including hostile collections. Never deployed. |
+| `web/` | The website: the scrolling story and the trading app. Static, no server; it reads the realm over RPC and signs with Adena. |
 | `solver/` | Off-chain ring finder in Go, a command-line tool that prints settle commands, and an agent skill for gnomcp. |
 | `scripts/` | One command to start a seeded local chain, a script that stages the packages for a namespace, and the step-by-step testnet rehearsal. |
 | `docs/DESIGN.md` | The design, the decisions and the threat list. |
@@ -52,11 +55,15 @@ Whoever settles a ring receives the storage deposits that its offers and approva
 
 ## Try it on the testnet
 
-Everything happens on the realm's own page, with a wallet such as Adena set to the `onyx-1` testnet.
+You need the Adena wallet set to the `onyx-1` testnet and a little test GNOT for fees. You can read the book and the rings without a wallet.
 
-1. Open https://onyx.testnets.gno.land/r/nym-kylix000/kylix and follow **Get free demo assets**: the faucet at `r/nym-kylix000/kylixdemo` gives 1,000 OBOL, 1,000 DRACHMA and one relic per claim.
-2. **Post an offer**: the page works out your offer's address, shows the approval to sign, then the offer to post.
-3. When a ring is ready it appears under **Ready to settle** with its picture. Anyone can settle it.
+In the web app, at https://elangrr.github.io/kylix/app:
+
+1. **Connect Adena**, then **Claim demo assets**: the faucet at `r/nym-kylix000/kylixdemo` gives 1,000 OBOL, 1,000 DRACHMA and one relic per claim.
+2. **Post an offer**: choose what you give and the least you will take. Your wallet signs one transaction that approves exactly that asset to the offer's own address and posts the offer.
+3. When offers close a ring it appears under **Rings ready to settle** with its picture from the chain. Anyone can settle it. You can cancel your own offers from the list of open offers.
+
+The realm's own page does the same without the web app: open https://onyx.testnets.gno.land/r/nym-kylix000/kylix and follow **Get free demo assets**, **Post an offer** and **Ready to settle**.
 
 The solver works against the testnet too:
 
