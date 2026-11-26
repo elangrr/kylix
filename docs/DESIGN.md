@@ -26,7 +26,7 @@ Do not reopen these without a concrete reason found in code or tests.
 
 ## Packages
 
-Namespace `nym-kylix000` is a placeholder until a namespace is claimed on the testnet. Keep it in one place per module (`gnomod.toml` plus imports) so it can be replaced by search.
+Namespace `nym-kylix000` is registered on the onyx-1 testnet to the deployer account, and the packages are live under it. `scripts/stage.sh <namespace>` produces a copy under another namespace (a registered name or an account's own address) for a rehearsal.
 
 | Directory | Module path | Purpose |
 |---|---|---|
@@ -248,4 +248,5 @@ Loopring's order rings and CoW Protocol's ring trades settle circular trades on 
 Status on 2026-11-25.
 
 - **Done (four review rounds, all findings fixed or documented):** `p/ring` with the ring graph; `r/kylix` with the GnoSwap bridge, adapters, paging, the batch deliverability check, mandatory expiry and pruning, the page and notifications; `r/kylixdemo`; two official adapters tested against real collection source; the bridge run against real GnoSwap source in a lab; the off-chain solver and gnomcp skill; one independent security review (`docs/research/security-review-1.md`) with every finding fixed or documented.
-- **Next:** claim a namespace and deploy to the testnet (needs the project owner's key and go-ahead); rehearse a direct ring, a GnoSwap ring and an adapter ring on the live testnet; check the page in a real gnoweb with Adena; static page that bundles approve and post through Adena; README; demo video.
+- **Done on the testnet (26 November 2026):** namespace `nym-kylix000` registered; a staging copy deployed under an address namespace and rehearsed with `scripts/testnet-rehearsal.sh` (direct ring, refusals, two GnoSwap rings, an MNS name sale, a session key, the notification owner check); the gas limits corrected from what the rehearsal measured; the final packages deployed.
+- **Next:** check the page in a real gnoweb with Adena; static page that bundles approve and post through Adena; demo video.

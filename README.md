@@ -4,6 +4,8 @@
 
 Built for the Gnome Tavern Hackathon. The name is the Greek cup that was passed round the circle at a drinking party.
 
+**Live on the Gno.land testnet (onyx-1):** https://onyx.testnets.gno.land/r/nym-kylix000/kylix
+
 ![A ring of three offers, one of them swapped through GnoSwap](docs/img/ring.svg)
 
 ## Why
@@ -30,7 +32,7 @@ Whoever settles a ring receives the storage deposits that its offers and approva
 | `r/adapters` | Adapters that let existing collections trade without redeploying: Sinopia3 artworks and MNS names. |
 | `r/mocks` | Test-only stand-ins, including hostile collections. Never deployed. |
 | `solver/` | Off-chain ring finder in Go, a command-line tool that prints settle commands, and an agent skill for gnomcp. |
-| `scripts/` | One command to start a seeded local chain. |
+| `scripts/` | One command to start a seeded local chain, a script that stages the packages for a namespace, and the step-by-step testnet rehearsal. |
 | `docs/DESIGN.md` | The design, the decisions and the threat list. |
 | `docs/research/` | The GnoSwap and collection studies and the security review. |
 
@@ -47,6 +49,28 @@ Whoever settles a ring receives the storage deposits that its offers and approva
 | Session keys | An agent can post and settle for you but can never cancel your offers. |
 | gnomcp | The solver skill lets an AI agent find rings and settle them. |
 | gnotif | Each trader gets a notification when their swap settles. |
+
+## Try it on the testnet
+
+Everything happens on the realm's own page, with a wallet such as Adena set to the `onyx-1` testnet.
+
+1. Open https://onyx.testnets.gno.land/r/nym-kylix000/kylix and follow **Get free demo assets**: the faucet at `r/nym-kylix000/kylixdemo` gives 1,000 OBOL, 1,000 DRACHMA and one relic per claim.
+2. **Post an offer**: the page works out your offer's address, shows the approval to sign, then the offer to post.
+3. When a ring is ready it appears under **Ready to settle** with its picture. Anyone can settle it.
+
+The solver works against the testnet too:
+
+```sh
+cd solver && go build ./cmd/kylix-solver
+./kylix-solver --rpc https://rpc.onyx.testnets.gno.land:443 --realm gno.land/r/nym-kylix000/kylix
+```
+
+| Deployed package | Path |
+|---|---|
+| Realm | `gno.land/r/nym-kylix000/kylix` |
+| Ring verifier and picture | `gno.land/p/nym-kylix000/ring/v0` |
+| Demo tokens and relics | `gno.land/r/nym-kylix000/kylixdemo` |
+| Adapters | `gno.land/r/nym-kylix000/adapters/nsnft`, `gno.land/r/nym-kylix000/adapters/sinopia3` |
 
 ## Try it locally
 
@@ -118,7 +142,21 @@ A collection that is already deployed can be reached through an adapter realm in
 
 ## What it costs
 
-Measured with real transactions on a local chain running gno v1.8.0. Storage costs 100 ugnot per byte and is refunded to whoever frees it. The minimum fee is the gas limit divided by 1,000, in ugnot. The first three settle rows are for receivers who already hold the token they receive; a first-time holder's balance entry is charged to the settler, which the last rows show.
+On the testnet, measured during the rehearsal described under Status:
+
+| Action | Gas | Storage deposit |
+|---|---|---|
+| Approve | 6 to 7 million | 0.11 to 0.21 GNOT paid |
+| Post an offer | 20 to 23 million (30 for an MNS name) | 0.06 to 0.10 GNOT paid; 0.5 to 1.0 for an account's first offer |
+| Cancel | 11 million | 0.06 to 0.52 GNOT back to the owner |
+| Settle 2 token offers | 26 million | 0.54 GNOT to the settler |
+| Settle 3 offers (token, relic, token) | 34 million | 1.16 GNOT to the settler |
+| Settle 2 offers, one an MNS name | 45 million | 0.44 GNOT to the settler |
+| Settle 2 offers with a GnoSwap swap | 146 million | 0.79 to 1.20 GNOT to the settler |
+
+A swap through GnoSwap is by far the heaviest step: about 118 million gas on the real chain, where a test run of GnoSwap's source had suggested 34 million. The ring page and the solver size the gas limit for it.
+
+On a local chain, measured with real transactions on gno v1.8.0. Storage costs 100 ugnot per byte and is refunded to whoever frees it. The minimum fee is the gas limit divided by 1,000, in ugnot. The first three settle rows are for receivers who already hold the token they receive; a first-time holder's balance entry is charged to the settler, which the last rows show.
 
 | Action | Gas | Storage deposit |
 |---|---|---|
@@ -150,4 +188,19 @@ Settling trades in rings is not new. Loopring's order rings and CoW Protocol's r
 
 ## Status
 
-Not yet deployed to a public network. The package paths use the placeholder namespace `nym-kylix000`.
+Live on the `onyx-1` testnet under the namespace `nym-kylix000` since 26 November 2026.
+
+Before the realm was deployed at its permanent path, an identical copy was deployed under a throwaway address and rehearsed with real transactions (`scripts/testnet-rehearsal.sh`):
+
+| Step | Result on the testnet |
+|---|---|
+| A ring of three direct offers (token, relic, token) | Settled with the command the solver printed; every asset moved; the settler ended 1.11 GNOT ahead |
+| Refusals | A ring that does not close, a cancel by a non-owner, a reused approval, a post without approval and a blanket approval were all refused |
+| A ring with a GnoSwap swap, by `SettleRing` and by `SettleRingVia` | Both settled against the real wugnot/GNS pool; the receiver got the quoted amount; Kylix's settle address held nothing afterwards |
+| An MNS name sale | A name was registered, sold through the adapter and is owned by the buyer |
+| A session key | Posted and settled; refused on cancel |
+| Notifications | Refused for an account that does not own the namespace, accepted for the owner; a settlement emitted one event per trader |
+
+Not shown on the testnet: a Sinopia3 sale. Every artwork the adapter accepts is held by two addresses and none is listed, so that adapter is covered by tests against the real Sinopia3 source only.
+
+The rehearsal changed the code twice. A real GnoSwap swap needs about 118 million gas, so the gas limit for a ring with a swap went from 85 to 185 million. And a ring with an MNS name ran a hair over its 44 million limit, which is now 55 million.

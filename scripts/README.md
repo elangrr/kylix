@@ -134,3 +134,19 @@ printf local-demo-only > /tmp/pw
 NS=nym-kylix000 RPC=127.0.0.1:51657 CHAIN_ID=dev KEYS=$PWD/.local-demo/keys \
   PWFILE=/tmp/pw KEY_OWNER=deployer KEY_SETTLER=dora scripts/testnet-rehearsal.sh all
 ```
+
+## Deploying to onyx-1
+
+What we learned putting Kylix on the testnet, for anyone repeating it.
+
+1. **Stage.** `scripts/stage.sh <namespace>` copies the production files of the five packages to `.deploy/<namespace>/` with the namespace substituted, and prints the order to deploy them in. A namespace is a name registered with `gno.land/r/sys/namereg/v0` (`Register`, free, format `nym-` + 5 to 13 letters + 3 digits) or your own address.
+2. **Submit.** `gnokey maketx addpkg -pkgdir <dir> -pkgpath <path> -max-deposit <cap>`. The testnet only parks the package. Gas is about 1,300 per byte of source: 45 million for the ring package, 180 million for the realm, 20 million for the others.
+3. **Wait for the approver.** A service checks the package and enables it one hour after a passing verdict. Follow it at `https://gpas.onyx.testnets.gno.land/?path=<package path>`, and trust the chain, not the board: `gnokey query vm/qpkgmeta_json -data <path>` says `"status":"live"` when it is done. A package that imports a parked package waits for it, so each layer adds an hour. All five can be submitted at once.
+4. **Set the deposit cap with room.** The storage deposit is taken from the submitter when the package is enabled. If it exceeds the `-max-deposit` given at submit, the approver sends nothing and the board still says "passed". Measured: ring 4.6 GNOT, realm 16.4, kylixdemo 4.3, each adapter about 1.5.
+
+Two things can leave a package "in review queue" for good:
+
+- **A slice of a basic type made with a variable length**, such as `make([]string, n)`. `make([]string, len(x))`, a constant length, a variable capacity (`make([]string, 0, n)`), maps, and slices of structs or pointers all pass. We found this by submitting one-construct probe packages; a verdict comes back within a minute, so probing is cheap.
+- **Imports of `crypto/bn254`, `crypto/ed25519`, `crypto/solsha3` or `crypto/modexp`.**
+
+A public package path cannot be redeployed. Rehearse a copy under your own address first: ours showed that a GnoSwap swap needs four times the gas a local test had suggested.

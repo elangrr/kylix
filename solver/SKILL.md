@@ -5,7 +5,7 @@ description: Run one Kylix ring-solving round on Gno.land (onyx-1 testnet) using
 
 # Kylix Off-Chain Ring Solver (gnomcp Skill)
 
-This skill guides an AI agent through **one solving round** for the Kylix trade-ring realm (`gno.land/r/nym-kylix000/kylix` placeholder; replace with the deployed realm path).
+This skill guides an AI agent through **one solving round** for the Kylix trade-ring realm (`gno.land/r/nym-kylix000/kylix` on the onyx-1 testnet).
 
 ## Hard Safety Rules (Non-Negotiable)
 
