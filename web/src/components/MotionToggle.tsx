@@ -1,7 +1,6 @@
 import { setMotion, useMotion } from '../story/hooks.ts'
 
-// Switches the scroll animation on or off. The default follows the system's
-// reduced-motion setting.
+// Switches the scroll animation on or off. It starts on.
 export function MotionToggle({ className }: { className: string }) {
   const motion = useMotion()
   return (

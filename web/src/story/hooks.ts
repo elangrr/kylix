@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 
-const reducedQuery = '(prefers-reduced-motion: reduce)'
-
 // How much the page moves. "full" animates the scenes as you scroll. "reduced"
-// keeps the story pinned and cross-fades between scenes. The default follows
-// the system setting, and the switch in the header overrides it.
+// keeps the story pinned and cross-fades between scenes. The animation is on
+// unless the visitor turns it off with the switch in the header or footer.
 export type Motion = 'full' | 'reduced'
 
 const storageKey = 'kylix-motion'
@@ -20,15 +18,12 @@ function storedMotion(): Motion | null {
 }
 
 function currentMotion(): Motion {
-  return storedMotion() ?? (window.matchMedia(reducedQuery).matches ? 'reduced' : 'full')
+  return storedMotion() ?? 'full'
 }
 
 function subscribeMotion(onChange: () => void): () => void {
-  const mq = window.matchMedia(reducedQuery)
-  mq.addEventListener('change', onChange)
   motionListeners.add(onChange)
   return () => {
-    mq.removeEventListener('change', onChange)
     motionListeners.delete(onChange)
   }
 }
