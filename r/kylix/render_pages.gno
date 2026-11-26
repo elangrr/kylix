@@ -206,7 +206,7 @@ func renderRing(rawIDs string) string {
 	}
 
 	// Live readiness check (same checks SettleRing runs before moving anything).
-	reasons := make([]string, n)
+	reasons := make([]string, len(idList))
 	var bridgeFeeTier uint32
 	bridgeHasPool := true
 	allReady := true
