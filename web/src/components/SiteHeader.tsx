@@ -1,4 +1,5 @@
 import { Link } from '../Link.tsx'
+import { MotionToggle } from './MotionToggle.tsx'
 
 export function SiteHeader() {
   return (
@@ -12,6 +13,7 @@ export function SiteHeader() {
         <span>Kylix</span>
       </Link>
       <nav aria-label="Main">
+        <MotionToggle className="motion-toggle motion-toggle-header" />
         <Link to="/app" className="header-link">Start trading</Link>
       </nav>
     </header>

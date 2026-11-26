@@ -2,14 +2,53 @@ import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } fro
 
 const reducedQuery = '(prefers-reduced-motion: reduce)'
 
-function subscribeReduced(onChange: () => void): () => void {
-  const mq = window.matchMedia(reducedQuery)
-  mq.addEventListener('change', onChange)
-  return () => mq.removeEventListener('change', onChange)
+// How much the page moves. "full" animates the scenes as you scroll. "reduced"
+// keeps the story pinned and cross-fades between scenes. The default follows
+// the system setting, and the switch in the header overrides it.
+export type Motion = 'full' | 'reduced'
+
+const storageKey = 'kylix-motion'
+const motionListeners = new Set<() => void>()
+
+function storedMotion(): Motion | null {
+  try {
+    const value = window.localStorage.getItem(storageKey)
+    return value === 'full' || value === 'reduced' ? value : null
+  } catch {
+    return null
+  }
 }
 
-export function usePrefersReducedMotion(): boolean {
-  return useSyncExternalStore(subscribeReduced, () => window.matchMedia(reducedQuery).matches)
+function currentMotion(): Motion {
+  return storedMotion() ?? (window.matchMedia(reducedQuery).matches ? 'reduced' : 'full')
+}
+
+function subscribeMotion(onChange: () => void): () => void {
+  const mq = window.matchMedia(reducedQuery)
+  mq.addEventListener('change', onChange)
+  motionListeners.add(onChange)
+  return () => {
+    mq.removeEventListener('change', onChange)
+    motionListeners.delete(onChange)
+  }
+}
+
+export function setMotion(motion: Motion): void {
+  try {
+    window.localStorage.setItem(storageKey, motion)
+  } catch {
+    // Storage can be blocked. The choice then lasts until the page reloads.
+  }
+  document.documentElement.dataset.motion = motion
+  motionListeners.forEach((listener) => listener())
+}
+
+export function useMotion(): Motion {
+  const motion = useSyncExternalStore(subscribeMotion, currentMotion)
+  useEffect(() => {
+    document.documentElement.dataset.motion = motion
+  }, [motion])
+  return motion
 }
 
 // Which step is active: the last one whose text has passed a line across the

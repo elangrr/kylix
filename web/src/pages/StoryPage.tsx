@@ -6,7 +6,7 @@ import { Link } from '../Link.tsx'
 import { sampleRings } from '../sampleData.ts'
 import { Stage } from '../story/Stage.tsx'
 import { steps, type Step } from '../story/steps.ts'
-import { useActiveStep, usePrefersReducedMotion } from '../story/hooks.ts'
+import { useActiveStep } from '../story/hooks.ts'
 
 function StepText({ step, index }: { step: Step; index: number }) {
   const first = index === 0
@@ -71,24 +71,6 @@ function ScrollStory() {
   )
 }
 
-// With reduced motion, each scene is a still picture next to its text.
-function StillStory() {
-  return (
-    <section className="stills" aria-label="How Kylix works">
-      {steps.map((step, i) => (
-        <article key={step.label} className="still">
-          <div className="still-picture">
-            <Stage scene={i} label={step.picture} />
-          </div>
-          <div className="still-text">
-            <StepText step={step} index={i} />
-          </div>
-        </article>
-      ))}
-    </section>
-  )
-}
-
 function LiveRings() {
   return (
     <section className="live" aria-labelledby="live-title">
@@ -117,13 +99,12 @@ function LiveRings() {
 }
 
 export function StoryPage() {
-  const reduced = usePrefersReducedMotion()
   return (
     <>
       <a className="skip-link" href="#live-title">Skip to the rings</a>
       <SiteHeader />
       <main>
-        {reduced ? <StillStory /> : <ScrollStory />}
+        <ScrollStory />
         <LiveRings />
       </main>
       <SiteFooter />

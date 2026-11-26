@@ -169,6 +169,35 @@ h1:focus-visible {
   padding: 4px 0 2px;
 }
 
+.motion-toggle {
+  font-family: var(--font-label);
+  font-weight: 500;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  color: var(--cream-dim);
+  background: none;
+  border: 1px solid var(--glaze-raised);
+  border-radius: 999px;
+  padding: 4px 12px;
+  margin-right: 20px;
+  cursor: pointer;
+}
+
+.motion-toggle-footer {
+  margin-right: 0;
+}
+
+@media (max-width: 599px) {
+  .motion-toggle-header {
+    display: none;
+  }
+}
+
+.motion-toggle:hover {
+  color: var(--cream);
+  border-color: var(--clay-deep);
+}
+
 .header-link:hover {
   border-bottom-color: var(--clay);
 }
@@ -449,26 +478,6 @@ h1:focus-visible {
   font-family: var(--font-display);
   font-size: 21px;
   fill: var(--cream-dim);
-}
-
-/* Reduced motion: every scene as a still, next to its text. */
-.stills {
-  padding: 0 var(--gutter);
-}
-
-.still {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: clamp(24px, 5vw, 72px);
-  align-items: center;
-  padding: 48px 0;
-  border-bottom: 1px solid var(--glaze-raised);
-}
-
-.still-picture {
-  max-width: 560px;
-  width: 100%;
-  justify-self: center;
 }
 
 /* Live rings: the black-figure half of the cup, glaze on clay. */
@@ -782,22 +791,21 @@ h1:focus-visible {
     margin-bottom: 4px;
   }
 
-  .still,
   .placeholder {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .still-picture,
   .placeholder-picture {
     max-width: 420px;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    transition: none !important;
-    animation: none !important;
-  }
+/* Reduced motion: the story stays pinned and scenes cross-fade. Nothing travels. */
+:root[data-motion='reduced'] *,
+:root[data-motion='reduced'] *::before,
+:root[data-motion='reduced'] *::after {
+  animation: none !important;
+  transition-property: opacity !important;
+  transition-duration: 250ms !important;
+  transition-delay: 0ms !important;
 }
