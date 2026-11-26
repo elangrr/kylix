@@ -18,13 +18,13 @@ export interface AccountData {
 }
 
 export async function loadAccount(address: string, client: KylixClient = chain()): Promise<AccountData> {
-  const [gnot, tokens, owners, faucet] = await Promise.all([
+  const [gnot, tokens, relics, faucet] = await Promise.all([
     client.gnotBalance(address),
     client.tokenBalances(KNOWN_TOKENS.map((t) => t.key), address),
-    client.relicOwners(),
+    client.relicsOf(address),
     client.faucetStatus(address),
   ])
-  const items = owners.filter((r) => r.owner === address).map((r) => ({ key: PATHS.kylixdemo, id: r.id }))
+  const items = relics.map((id) => ({ key: PATHS.kylixdemo, id }))
   return { address, gnot, tokens, items, faucet }
 }
 

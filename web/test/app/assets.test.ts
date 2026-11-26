@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { assetName, assetPlain, blocksToText, formatUnits, parseUnits, shortAddress } from '../../src/app/assets.ts';
+import { assetName, assetPlain, blocksToText, displayText, formatUnits, parseUnits, shortAddress } from '../../src/app/assets.ts';
+import { errorText } from '../../src/app/txState.ts';
+import { VmError } from '../../src/lib/rpc.ts';
 import { PATHS, TOKENS } from '../../src/lib/config.ts';
 import type { Collection } from '../../src/lib/kylix.ts';
 
@@ -77,5 +79,42 @@ describe('small helpers', () => {
     expect(blocksToText(12)).toBe('about a minute');
     expect(blocksToText(720)).toBe('about 60 minutes');
     expect(blocksToText(17_280 * 7)).toBe('about 7 days');
+  });
+});
+
+describe('displayText', () => {
+  it('drops bidi controls and zero-width characters', () => {
+    expect(displayText('abc\u202Efdp.exe')).toBe('abcfdp.exe');
+    expect(displayText('\u2066Kylix\u2069 \u2067Relics\u2069')).toBe('Kylix Relics');
+    expect(displayText('Ky\u200Blix\u200C\u200D\u2060\uFEFF')).toBe('Kylix');
+    expect(displayText('a\u061Cb\u200E\u200Fc')).toBe('abc');
+    expect(displayText('a\u0000b\u0007c\u009Bd\u00ADe')).toBe('abcde');
+  });
+
+  it('turns runs of odd spaces into one plain space', () => {
+    const spoof = 'Kylix Relics (official collection)' + '\u00a0'.repeat(15);
+    expect(displayText(spoof)).toBe('Kylix Relics (official collection)');
+    expect(displayText('a\u2003\u2003b\u3000c\td\ne\u202Ff')).toBe('a b c d e f');
+  });
+
+  it('keeps ordinary text, other scripts and long runs as they are', () => {
+    expect(displayText('relic-12')).toBe('relic-12');
+    expect(displayText('Ἀθηνᾶ · שלום · 東京')).toBe('Ἀθηνᾶ · שלום · 東京');
+    expect(displayText('A'.repeat(64))).toBe('A'.repeat(64));
+  });
+
+  it('is applied to names, keys and errors shown on the page', () => {
+    const evil: Collection = {
+      key: 'gno.land/r/evil/\u202Efake',
+      name: 'Kylix Relics\u00a0\u00a0\u202E(official)',
+      adapter: false,
+      target: '',
+      official: false,
+      label: 'third-party collection',
+      approvalCheck: true,
+    };
+    const n = assetName({ kind: 'item', key: evil.key, id: 'relic\u200B-1', amount: 0n }, [evil]);
+    expect(n).toEqual({ main: 'relic-1', note: 'Kylix Relics (official), third-party collection', key: 'gno.land/r/evil/fake', unlisted: true });
+    expect(errorText(new VmError('kylix: offer\u202E 4\u00a0\u00a0is not open', ''))).toBe('The chain refused it: kylix: offer 4 is not open');
   });
 });

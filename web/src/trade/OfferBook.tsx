@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Collection, DeliverableStatus, Offer } from '../lib/kylix.ts'
 import { AssetLabel } from '../components/AssetLabel.tsx'
-import { blocksToText, shortAddress } from '../app/assets.ts'
+import { blocksToText, displayText, shortAddress } from '../app/assets.ts'
 import { links, prepareCancel } from '../app/actions.ts'
 import type { Loaded, TxRunner } from '../app/hooks.ts'
 import { errorText } from '../app/txState.ts'
@@ -36,23 +36,23 @@ function OfferDetails({ offer, height, rings }: { offer: Offer; height: number; 
             ? 'Asking the realm whether this offer can be delivered now…'
             : status.s.deliverable
               ? 'Ready: the owner holds what the offer gives and has approved it.'
-              : `Not ready: ${status.s.reason || 'the realm gave no reason'}.`}
+              : `Not ready: ${displayText(status.s.reason) || 'the realm gave no reason'}.`}
       </p>
       <dl>
         <div>
           <dt>Owner</dt>
-          <dd className="mono address">{offer.owner}</dd>
+          <dd className="mono address">{displayText(offer.owner)}</dd>
         </div>
         {offer.slot && (
           <div>
             <dt>Offer address</dt>
-            <dd className="mono address">{offer.slot}</dd>
+            <dd className="mono address">{displayText(offer.slot)}</dd>
           </div>
         )}
         {offer.approve && offer.approve !== offer.slot && (
           <div>
             <dt>Approved address</dt>
-            <dd className="mono address">{offer.approve}</dd>
+            <dd className="mono address">{displayText(offer.approve)}</dd>
           </div>
         )}
         <div>
@@ -116,7 +116,7 @@ function OfferRow({
           {mine ? (
             'you'
           ) : (
-            <span className="mono" title={offer.owner}>
+            <span className="mono" title={displayText(offer.owner)}>
               {shortAddress(offer.owner)}
             </span>
           )}

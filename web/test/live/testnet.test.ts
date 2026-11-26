@@ -100,6 +100,10 @@ describe('onyx-1, read only', () => {
     expect(relics.length).toBeGreaterThan(0);
     expect(relics[0]!.id).toBe('relic-1');
     expect(relics[0]!.owner).toBe(await k.relicOwner('relic-1'));
+    const holder = relics[0]!.owner;
+    const held = relics.filter((r) => r.owner === holder).map((r) => r.id);
+    expect(await k.relicCount(holder)).toBe(held.length);
+    expect(await k.relicsOf(holder)).toEqual(held);
 
     const f = await k.faucetStatus(owner);
     expect(f.height).toBeGreaterThan(0);

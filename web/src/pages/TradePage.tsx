@@ -1,9 +1,9 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { SiteHeader } from '../components/SiteHeader.tsx'
 import { SiteFooter, REALM_URL } from '../components/SiteFooter.tsx'
 import { loadAccount } from '../app/account.ts'
 import { usePolling, useTxRunner, useWallet } from '../app/hooks.ts'
-import { loadMarket } from '../app/market.ts'
+import { chain, loadMarket } from '../app/market.ts'
 import { pageWallet } from '../app/walletSession.ts'
 import { AccountPanel } from '../trade/AccountPanel.tsx'
 import { OfferBook } from '../trade/OfferBook.tsx'
@@ -25,20 +25,30 @@ export function TradePage() {
   const loadMine = useCallback(() => loadAccount(address ?? ''), [address])
   const account = usePolling(address ?? null, loadMine, ACCOUNT_EVERY)
 
-  // After a transaction lands, read again now and once more a few seconds
-  // later, past the client's short cache.
+  // After a transaction lands, forget the cached reads and read again now,
+  // then once more a few seconds later in case the RPC node lagged. The
+  // timer reads the current refresh functions, and is dropped when the
+  // account changes or the page goes away.
   const later = useRef<number | undefined>(undefined)
   const { refresh: refreshMarket } = market
   const { refresh: refreshAccount } = account
+  const refreshers = useRef({ refreshMarket, refreshAccount })
+  useEffect(() => {
+    refreshers.current = { refreshMarket, refreshAccount }
+  })
+  useEffect(() => {
+    return () => window.clearTimeout(later.current)
+  }, [address])
   const onLanded = useCallback(() => {
-    refreshMarket()
-    refreshAccount()
+    const again = () => {
+      chain().rpc.invalidate()
+      refreshers.current.refreshMarket()
+      refreshers.current.refreshAccount()
+    }
+    again()
     window.clearTimeout(later.current)
-    later.current = window.setTimeout(() => {
-      refreshMarket()
-      refreshAccount()
-    }, 6_000)
-  }, [refreshMarket, refreshAccount])
+    later.current = window.setTimeout(again, 6_000)
+  }, [])
   const tx = useTxRunner(wallet, onLanded)
 
   return (

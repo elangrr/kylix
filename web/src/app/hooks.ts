@@ -19,9 +19,11 @@ export interface Loaded<T> {
 }
 
 /**
- * Runs `load` now, then every `everyMs` while the tab is visible, and again
- * when the tab comes back after the data went stale. `key` restarts it (and
- * clears the data) when it changes; a null key loads nothing.
+ * Runs `load` now, then `everyMs` after each read finishes while the tab is
+ * visible, and again when the tab comes back after the data went stale. A
+ * slow read (the RPC backing off after a 429) delays the next one instead of
+ * overlapping it. `key` restarts it (and clears the data) when it changes; a
+ * null key loads nothing.
  */
 export function usePolling<T>(key: string | null, load: () => Promise<T>, everyMs: number): Loaded<T> {
   const [state, setState] = useState<{ key: string | null; data?: T; error?: string; loading: boolean; at: number }>({
@@ -39,10 +41,10 @@ export function usePolling<T>(key: string | null, load: () => Promise<T>, everyM
   // A new key drops the old key's data before the first read of the new one.
   if (state.key !== key) setState({ key, loading: key !== null, at: 0 })
 
-  const run = useCallback(() => {
-    if (key === null) return
+  const run = useCallback((): Promise<void> => {
+    if (key === null) return Promise.resolve()
     const mine = ++seq.current
-    loadRef.current().then(
+    return loadRef.current().then(
       (data) => {
         if (mine !== seq.current) return
         lastAt.current = Date.now()
@@ -58,17 +60,31 @@ export function usePolling<T>(key: string | null, load: () => Promise<T>, everyM
   useEffect(() => {
     if (key === null) return
     lastAt.current = 0
-    run()
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') run()
-    }, everyMs)
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && Date.now() - lastAt.current > everyMs) run()
+    let timer: number | undefined
+    let stopped = false
+    let running = false
+    const read = () => {
+      window.clearTimeout(timer)
+      running = true
+      void run().finally(() => {
+        running = false
+        if (!stopped) timer = window.setTimeout(tick, everyMs)
+      })
     }
+    const tick = () => {
+      if (stopped) return
+      if (document.visibilityState === 'visible') read()
+      else timer = window.setTimeout(tick, everyMs)
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !running && Date.now() - lastAt.current > everyMs) read()
+    }
+    read()
     document.addEventListener('visibilitychange', onVisible)
     const seqRef = seq
     return () => {
-      window.clearInterval(timer)
+      stopped = true
+      window.clearTimeout(timer)
       document.removeEventListener('visibilitychange', onVisible)
       // Answers to reads started before this point are dropped.
       seqRef.current++
@@ -119,11 +135,17 @@ export function useWallet(wallet: Wallet): WalletControls {
   const [view, setView] = useState<WalletView>({ status: 'checking' })
   // After "Disconnect", the page stops reading the account until the user connects again.
   const forgotten = useRef(false)
+  // Each wallet request takes a number; an answer is used only if no request
+  // (or Disconnect) came after it, so a slow answer cannot undo a newer one.
+  const seq = useRef(0)
 
   const readAccount = useCallback(async (): Promise<void> => {
     if (forgotten.current) return
+    const mine = ++seq.current
+    const current = () => mine === seq.current && !forgotten.current
     try {
       const acc = await wallet.account()
+      if (!current()) return
       if (!acc) {
         setView({ status: 'disconnected' })
         return
@@ -134,15 +156,18 @@ export function useWallet(wallet: Wallet): WalletControls {
           : { status: 'wrong-network', address: acc.address, chainId: acc.chainId },
       )
     } catch (e) {
-      setView({ status: 'disconnected', error: errorText(e) })
+      if (current()) setView({ status: 'disconnected', error: errorText(e) })
     }
   }, [wallet])
 
   useEffect(() => {
     let live = true
+    const startSeq = seq.current
     void (async () => {
       const installed = await walletInstalled(wallet)
       if (!live) return
+      // The user pressed Connect while the page waited for the extension.
+      if (seq.current !== startSeq && installed) return
       if (!installed) {
         setView({ status: 'not-installed' })
         return
@@ -152,38 +177,52 @@ export function useWallet(wallet: Wallet): WalletControls {
     })()
     const offAccount = wallet.onAccountChange(() => void readAccount())
     const offNetwork = wallet.onNetworkChange(() => void readAccount())
+    const seqRef = seq
     return () => {
       live = false
       offAccount()
       offNetwork()
+      // Answers still on their way are dropped.
+      seqRef.current++
     }
   }, [wallet, readAccount])
 
   const connect = useCallback(() => {
     forgotten.current = false
+    const mine = ++seq.current
     setView((v) => ({ ...v, status: 'connecting', error: undefined }))
     wallet.connect(SITE_NAME).then(
-      (acc) =>
+      (acc) => {
+        if (mine !== seq.current) return
         setView(
           acc.chainId === CHAIN_ID
             ? { status: 'connected', address: acc.address, chainId: acc.chainId }
             : { status: 'wrong-network', address: acc.address, chainId: acc.chainId },
-        ),
-      (e: unknown) =>
-        setView({ status: wallet.isInstalled() ? 'disconnected' : 'not-installed', error: connectError(e) }),
+        )
+      },
+      (e: unknown) => {
+        if (mine !== seq.current) return
+        setView({ status: wallet.isInstalled() ? 'disconnected' : 'not-installed', error: connectError(e) })
+      },
     )
   }, [wallet])
 
   const switchNetwork = useCallback(() => {
+    const mine = ++seq.current
     setView((v) => ({ ...v, status: 'switching', error: undefined }))
     wallet.ensureNetwork().then(
-      () => void readAccount(),
-      (e: unknown) => setView((v) => ({ ...v, status: 'wrong-network', error: errorText(e) })),
+      () => {
+        if (mine === seq.current) void readAccount()
+      },
+      (e: unknown) => {
+        if (mine === seq.current) setView((v) => ({ ...v, status: 'wrong-network', error: errorText(e) }))
+      },
     )
   }, [wallet, readAccount])
 
   const disconnect = useCallback(() => {
     forgotten.current = true
+    seq.current++
     setView({ status: 'disconnected' })
   }, [])
 

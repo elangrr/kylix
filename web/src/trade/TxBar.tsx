@@ -1,5 +1,6 @@
 import type { TxRunner } from '../app/hooks.ts'
 import { txSentence } from '../app/txState.ts'
+import { displayText } from '../app/assets.ts'
 
 // The state of the current transaction, pinned to the bottom of the window.
 // The live region is a separate element that stays in the page at all
@@ -18,7 +19,7 @@ export function TxBar({ tx }: { tx: TxRunner }) {
           <p className="txbar-text">{txSentence(s)}</p>
           {hash && (
             <p className="txbar-hash">
-              Transaction <span className="mono">{hash}</span>
+              Transaction <span className="mono">{displayText(hash)}</span>
             </p>
           )}
           <div className="txbar-actions">

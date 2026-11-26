@@ -33,6 +33,10 @@ export interface Market {
   rings: RingView[]
   /** Deliverable status of every offer in a found ring. */
   status: Map<number, DeliverableStatus>
+  /** The GnoSwap quote limit stopped a quote, so rings with a swap may be missing. */
+  quotesCut: boolean
+  /** Too many offers to check in one refresh, so some rings were not checked. */
+  checksCut: boolean
 }
 
 /** Ring ids to their offers, in ring order. Rings with an offer missing from the book are dropped. */
@@ -53,14 +57,19 @@ export function ringViews(rings: Ring[], offers: Offer[]): RingView[] {
 // refresh, to stay well inside the RPC's rate limit.
 const MAX_PICTURES = 8
 
-/** A fresh quoter per refresh, so quotes follow the pools; pool lookups stay in the client's cache. */
-export function quoter(client: KylixClient = chain()): GnoSwapQuoter {
-  return new GnoSwapQuoter(client.rpc, { maxQuotes: 16, maxPairs: 8 })
+/**
+ * A fresh quoter per refresh, so quotes follow the pools; pool lookups stay
+ * in the client's cache. `fresh` skips the cached DrySwapRoute answers, for
+ * a quote taken right before signing.
+ */
+export function quoter(client: KylixClient = chain(), opts: { fresh?: boolean } = {}): GnoSwapQuoter {
+  return new GnoSwapQuoter(client.rpc, { maxQuotes: 16, maxPairs: 8, ...(opts.fresh ? { quoteCacheMs: 0 } : {}) })
 }
 
 /** The book, the rings ready to settle now (one GnoSwap hop allowed), and their pictures. */
 export async function loadMarket(client: KylixClient = chain()): Promise<Market> {
-  const { graph, rings, status } = await client.readyRings(undefined, { quote: quoter(client).quote })
+  const q = quoter(client)
+  const { graph, rings, status, checksCut } = await client.readyRings(undefined, { quote: q.quote })
   const views = ringViews(rings, graph.offers)
   await Promise.all(
     views.slice(0, MAX_PICTURES).map(async (v) => {
@@ -71,7 +80,7 @@ export async function loadMarket(client: KylixClient = chain()): Promise<Market>
       }
     }),
   )
-  return { graph, rings: views, status }
+  return { graph, rings: views, status, quotesCut: q.truncated, checksCut }
 }
 
 /** True for a data URI the realm's ring page produces, and nothing else. */

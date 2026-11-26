@@ -156,6 +156,28 @@ describe('AdenaWallet', () => {
     f.listeners.changedNetwork![0]!('gnoland-1');
     expect(seen).toEqual([`1:${OTHER}`, `2:${OTHER}`, `2:${ME}`, 'net:gnoland-1']);
   });
+
+  it('registers the listeners when Adena appears after the page subscribed', async () => {
+    const f = fakeAdena();
+    let injected: AdenaInjected | undefined;
+    const w = new AdenaWallet({ getAdena: () => injected });
+    const seen: string[] = [];
+    w.onAccountChange((a) => seen.push(`acc:${a}`));
+    w.onNetworkChange((c) => seen.push(`net:${c}`));
+    expect(f.listeners.changedAccount).toBeUndefined();
+    setTimeout(() => (injected = f.a), 150);
+    expect(await w.waitInstalled(2_000)).toBe(true);
+    expect(await w.account()).not.toBeNull();
+    expect(f.listeners.changedAccount).toHaveLength(1);
+    expect(f.listeners.changedNetwork).toHaveLength(1);
+    f.listeners.changedAccount![0]!(OTHER);
+    f.listeners.changedNetwork![0]!('test11');
+    expect(seen).toEqual([`acc:${OTHER}`, 'net:test11']);
+    // Later calls do not register again.
+    await w.network();
+    w.isInstalled();
+    expect(f.listeners.changedAccount).toHaveLength(1);
+  });
 });
 
 describe('parseSendResult', () => {
@@ -167,6 +189,52 @@ describe('parseSendResult', () => {
     expect(() =>
       parseSendResult({ hash: 'h', height: '5', deliver_tx: { ResponseBase: { Error: { value: 'panic: kylix: offer 4 is not open' }, Data: null, Log: '' } } }),
     ).toThrow(/kylix: offer 4 is not open/);
+  });
+
+  // broadcast_tx_commit when CheckTx refuses: check_tx carries the error,
+  // height is 0 and deliver_tx is an empty result.
+  const checkTxFailure = {
+    hash: 'aGFzaA==',
+    height: '0',
+    check_tx: { ResponseBase: { Error: { '@type': '/std.InvalidSequenceError' }, Data: null, Events: null, Log: '', Info: '' }, GasWanted: '0', GasUsed: '0' },
+    deliver_tx: { ResponseBase: { Error: null, Data: null, Events: null, Log: '', Info: '' }, GasWanted: '0', GasUsed: '0' },
+  };
+
+  it('throws on a check_tx error and never reports it committed', () => {
+    let err: unknown;
+    try {
+      parseSendResult(checkTxFailure);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(WalletError);
+    expect((err as WalletError).kind).toBe('failed');
+    expect((err as WalletError).message).toBe('InvalidSequenceError');
+  });
+
+  it('uses the check_tx log or value when there is one', () => {
+    const withLog = { ...checkTxFailure, check_tx: { ResponseBase: { Error: { '@type': '/std.OutOfGasError' }, Log: 'out of gas in location: x' } } };
+    expect(() => parseSendResult(withLog)).toThrow(/out of gas in location/);
+    const withValue = { ...checkTxFailure, check_tx: { ResponseBase: { Error: { value: 'insufficient fees' }, Log: '' } } };
+    expect(() => parseSendResult(withValue)).toThrow(/insufficient fees/);
+  });
+
+  it('never reports a result with no block height as committed', () => {
+    const noHeight = { hash: 'h', height: '0', check_tx: { ResponseBase: { Error: null } }, deliver_tx: { ResponseBase: { Error: null, Data: null, Log: '' } } };
+    const sent = { hash: 'h', committed: false, returned: [] };
+    expect(parseSendResult(noHeight)).toEqual(sent);
+    expect(parseSendResult({ ...noHeight, height: undefined })).toEqual(sent);
+    expect(parseSendResult({ hash: 'h', height: '9', check_tx: { ResponseBase: { Error: null } } })).toEqual(sent);
+    expect(() => parseSendResult({ ...noHeight, hash: undefined })).toThrow(WalletError);
+  });
+
+  it('an empty deliver_tx log falls back to a message', () => {
+    expect(() => parseSendResult({ hash: 'h', height: '5', deliver_tx: { ResponseBase: { Error: {}, Log: '' } } })).toThrow('transaction failed');
+  });
+
+  it('reads a committed result', () => {
+    const r = parseSendResult({ hash: 'h', height: '12', check_tx: { ResponseBase: { Error: null } }, deliver_tx: { ResponseBase: { Error: null, Data: null, Log: '' }, GasUsed: '7', GasWanted: '9' } });
+    expect(r).toEqual({ hash: 'h', committed: true, height: 12, gasUsed: 7, gasWanted: 9, returned: [] });
   });
 });
 

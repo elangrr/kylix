@@ -24,7 +24,9 @@ npm run preview    # serves dist/ at http://localhost:4173/kylix/
 
 `/app` reads the book from the realm and works without a wallet. With Adena connected on onyx-1 it shows the account's GNOT, the known tokens and its demo relics, claims demo assets, posts offers (approve and post in one transaction of two messages), settles ready rings and cancels the account's own offers. The ring finder runs in the browser, including rings with one GnoSwap hop. An offer can give a demo relic, a token, or an MNS name through the nsnft adapter.
 
-The page reads the book every 30 seconds and the balances every 45 seconds, only while the tab is visible, and again after each of the user's transactions. It talks to nothing but the onyx-1 RPC and indexer.
+The page reads the book 30 seconds after the last read finished and the balances 45 seconds after theirs, only while the tab is visible, so a slow read never overlaps the next. After each of the user's transactions it drops the cached reads and reads both again, then once more six seconds later. It talks to nothing but the onyx-1 RPC and indexer.
+
+To stay inside the RPC's rate limit, one read of the book asks `Deliverable` about at most 200 offers and makes at most 16 GnoSwap quotes. When either limit cuts the search short, the ready rings panel says that some rings may be missing.
 
 ### Without Adena, in development only
 
@@ -38,7 +40,7 @@ The page reads the book every 30 seconds and the balances every 45 seconds, only
 | `?wallet=mock-fail` | A wallet whose transactions the chain refuses |
 | `?wallet=none` | No wallet installed |
 
-`scripts/app-check.mjs` drives these with Playwright against live testnet reads: connect, balances, the post form, settle, details, cancel, claim and each wallet state, at 1440 px and 360 px. It checks the transaction handed to the wallet each time and saves screenshots.
+`scripts/app-check.mjs` drives these with Playwright against live testnet reads: connect, balances, the post form, settle, details, cancel, claim and each wallet state, at 1440 px and 360 px. It checks the transaction handed to the wallet each time and saves screenshots. It also rewrites some RPC answers in the browser to feed the page hostile data (a collection name padded with no-break spaces, bidi overrides, 64-character item ids) and checks that the page never scrolls sideways and that the collection picker shows the trust mark first.
 
 ```sh
 npm run dev -- --port 5199 &
@@ -74,6 +76,6 @@ This saves every scene at 1440 px and 360 px wide, the `/app` page, and the page
 | `src/pages/` | The story page, the trading page and the not-found page. |
 | `test/` | Unit tests (`test/app/` for the app logic) and live reads (`test/live/`). |
 
-Everything read from the chain is treated as text written by strangers. It is rendered as text, the realm's ring picture is shown only through an `<img>` with a `data:image/svg+xml;base64` URI, and a token outside the known set is shown by its full key so a look-alike symbol stands out.
+Everything read from the chain is treated as text written by strangers. It is rendered as text, the realm's ring picture is shown only through an `<img>` with a `data:image/svg+xml;base64` URI, and a token outside the known set is shown by its full key so a look-alike symbol stands out. Before display, every chain string goes through `displayText` in `src/app/assets.ts`, which removes bidi and zero-width controls and turns runs of odd spaces into one space; names sit in `<bdi>`, long runs wrap, and the collection picker puts "Official" or "Third-party" before the name.
 
 Fonts (Marcellus, Alegreya, Alegreya Sans SC) come from Fontsource packages and are bundled with the site, so no page asks a font server for anything.

@@ -3,7 +3,7 @@ import { PATHS } from '../lib/config.ts'
 import type { Collection } from '../lib/kylix.ts'
 import type { AccountData } from '../app/account.ts'
 import { itemValue } from '../app/account.ts'
-import { KNOWN_TOKENS, assetPlain, formatUnits, knownToken } from '../app/assets.ts'
+import { KNOWN_TOKENS, assetPlain, collectionTrust, displayText, formatUnits, knownToken } from '../app/assets.ts'
 import { links, preparePost } from '../app/actions.ts'
 import type { TxRunner } from '../app/hooks.ts'
 import { chain } from '../app/market.ts'
@@ -104,10 +104,12 @@ export function PostForm({ address, account, collections, height, tx }: Props) {
   }
 
   const giveTokenKey = form.giveToken === OTHER_TOKEN ? form.giveTokenOther.trim() : form.giveToken
-  const giveKnown = knownToken(giveTokenKey)
-  const giveBal = account?.tokens.get(giveTokenKey)
-  const wantKnown = knownToken(form.wantToken === OTHER_TOKEN ? form.wantTokenOther.trim() : form.wantToken)
-  const itemCollections = collections.length > 0 ? collections : [{ key: PATHS.kylixdemo, name: 'Kylix Relics', label: 'official collection' } as Collection]
+  // A token typed under "Another token" is always in base units.
+  const giveKnown = form.giveToken === OTHER_TOKEN ? undefined : knownToken(giveTokenKey)
+  const giveBal = form.giveToken === OTHER_TOKEN ? undefined : account?.tokens.get(giveTokenKey)
+  const wantKnown = form.wantToken === OTHER_TOKEN ? undefined : knownToken(form.wantToken)
+  const itemCollections =
+    collections.length > 0 ? collections : [{ key: PATHS.kylixdemo, name: 'Kylix Relics', label: 'official collection', official: true } as Collection]
 
   return (
     <section className="panel" aria-labelledby="post-title">
@@ -181,7 +183,7 @@ export function PostForm({ address, account, collections, height, tx }: Props) {
                 <option value="">Choose an item</option>
                 {items.map((i) => (
                   <option key={itemValue(i)} value={itemValue(i)}>
-                    {i.id} ({i.key === PATHS.kylixdemo ? 'Kylix Relics' : i.key})
+                    {displayText(i.id)} ({i.key === PATHS.kylixdemo ? 'Kylix Relics' : displayText(i.key)})
                   </option>
                 ))}
                 <option value={MNS_ITEM}>An MNS name (type it)</option>
@@ -265,9 +267,10 @@ export function PostForm({ address, account, collections, height, tx }: Props) {
                   aria-invalid={!!errors.wantCollection}
                   aria-describedby={describedBy('post-wantCollection', errors.wantCollection)}
                 >
+                  {/* The trust mark comes first: a long or odd name cannot push it out of view. */}
                   {itemCollections.map((c) => (
                     <option key={c.key} value={c.key}>
-                      {c.name} ({c.label}) {c.key}
+                      {c.official ? 'Official' : 'Third-party'}: {displayText(c.name)} ({collectionTrust(c)}) {displayText(c.key)}
                     </option>
                   ))}
                 </select>

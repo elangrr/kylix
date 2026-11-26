@@ -8,6 +8,7 @@ import type { ApproveRoute, Asset, DeliverableStatus, Offer } from '../../src/li
 const ME = 'g1wpca5kqm5xgqm27etsaq994z9tc0cl7m33vxds';
 const SLOT = 'g1eceszdt9lt3adywvmy42sj4j8dt0e46negrc4j';
 const SUB = 'g12v99cmsg0m4z0huyynhvp8elcapjeqvgv6l05f';
+const UNREGISTERED = 'gno.land/r/gnoland/wugnot.WUGNOT';
 const tok = (key: string, amount: bigint): Asset => ({ kind: 'fungible', key, id: '', amount });
 const relic = (id: string): Asset => ({ kind: 'item', key: PATHS.kylixdemo, id, amount: 0n });
 
@@ -31,7 +32,14 @@ function fakeChain(over: Partial<ChainReads> = {}): ChainReads & { calls: string
       calls.push('approveTarget');
       return SUB;
     },
-    deliverable: async (ids: number[]) => new Map(ids.map((id) => [id, { id, deliverable: true, reason: '' } as DeliverableStatus])),
+    tokenBalance: async (key: string) => {
+      calls.push(`balance ${key}`);
+      return key === UNREGISTERED ? null : 1_000n;
+    },
+    deliverable: async (ids: number[], opts?: { cacheMs?: number }) => {
+      calls.push(`deliverable cacheMs=${opts?.cacheMs}`);
+      return new Map(ids.map((id) => [id, { id, deliverable: true, reason: '' } as DeliverableStatus]));
+    },
     faucetStatus: async () => ({ lastClaim: null, nextClaimHeight: 0, canClaimNow: true, height: 100 }),
     mnsName: async (name: string) => {
       calls.push(`mns ${name}`);
@@ -45,7 +53,7 @@ describe('preparePost', () => {
   it('approves exactly the amount to the next slot, then posts, in one transaction', async () => {
     const c = fakeChain();
     const plan = await preparePost(c, { caller: ME, give: tok(TOKENS.OBOL, 100n), want: tok(TOKENS.DRACHMA, 50n), expiry: 0 });
-    expect(c.calls).toEqual([`route ${TOKENS.OBOL}`, 'nextSlot']);
+    expect(c.calls).toEqual([`route ${TOKENS.OBOL}`, `balance ${TOKENS.OBOL}`, 'nextSlot']);
     expect(plan.messages.map((m) => [m.value.pkg_path, m.value.func, m.value.args])).toEqual([
       [PATHS.kylixdemo, 'Approve', ['OBOL', SLOT, '100']],
       [PATHS.kylix, 'PostIntent', ['fungible', TOKENS.OBOL, '', '100', 'fungible', TOKENS.DRACHMA, '', '50', '0']],
@@ -79,6 +87,19 @@ describe('preparePost', () => {
     await expect(preparePost(fakeChain(), { caller: ME, give: name('short*gno'), want, expiry: 0 })).rejects.toThrow(/less than 31 days left/);
   });
 
+  it('checks the token is registered and held before the wallet opens', async () => {
+    const tusd = 'gno.land/r/demo/tusd.tUSD';
+    const c = fakeChain({ approveRoute: async () => ({ kind: 'spender-amount', pkgPath: 'gno.land/r/demo/tusd' }) });
+    await expect(preparePost(c, { caller: ME, give: tok(tusd, 5_000n), want: tok(TOKENS.OBOL, 1n), expiry: 0 })).rejects.toThrow(
+      `You hold 1,000 units of ${tusd}, less than the 5,000 units of ${tusd} this offer gives.`,
+    );
+    await expect(preparePost(c, { caller: ME, give: tok(UNREGISTERED, 5n), want: tok(TOKENS.OBOL, 1n), expiry: 0 })).rejects.toThrow(
+      /No token is registered/,
+    );
+    expect(c.calls).not.toContain('nextSlot');
+    await expect(preparePost(c, { caller: ME, give: tok(tusd, 1_000n), want: tok(TOKENS.OBOL, 1n), expiry: 0 })).resolves.toBeTruthy();
+  });
+
   it('stops before the wallet when there is no known way to approve', async () => {
     await expect(
       preparePost(fakeChain(), { caller: ME, give: tok('gno.land/r/x/y.Z', 1n), want: tok(TOKENS.OBOL, 1n), expiry: 0 }),
@@ -93,8 +114,10 @@ describe('prepareSettle', () => {
     { id: 6, owner: SUB, nonce: 2, give: tok(TOKENS.DRACHMA, 50n), want: relic('relic-1'), expiry: 0, viaSession: false },
   ];
 
-  it('builds SettleRing with the ids in ring order', async () => {
-    const plan = await prepareSettle(fakeChain(), ME, offers);
+  it('builds SettleRing with the ids in ring order, after a Deliverable read that skips the cache', async () => {
+    const c = fakeChain();
+    const plan = await prepareSettle(c, ME, offers);
+    expect(c.calls).toEqual(['deliverable cacheMs=0']);
     expect(plan.messages).toHaveLength(1);
     expect(plan.messages[0]!.value).toMatchObject({ pkg_path: PATHS.kylix, func: 'SettleRing', args: ['4,5,6'], caller: ME });
   });

@@ -4,7 +4,7 @@ import { findBridgedRings, findRings, selectRings, verifyRing } from '../src/lib
 import type { Quote, Ring } from '../src/lib/rings.ts';
 import { GnoRpc } from '../src/lib/rpc.ts';
 import { buildSettle } from '../src/lib/tx.ts';
-import { TOKENS } from '../src/lib/config.ts';
+import { GNOSWAP_FEE_TIERS, TOKENS } from '../src/lib/config.ts';
 import type { Asset, Offer } from '../src/lib/kylix.ts';
 import { abciOk, fakeFetch, noSleep } from './helpers.ts';
 
@@ -61,12 +61,59 @@ describe('GnoSwapQuoter', () => {
   });
 
   it('stops quoting past its limit and says so', async () => {
-    const { fetch } = fakeFetch({});
-    const q = new GnoSwapQuoter(new GnoRpc({ fetch, sleep: noSleep }), { maxQuotes: 0 });
-    expect(await q.quote(W, G, 1n)).toBeNull();
+    const { fetch } = fakeFetch(poolRoutes([[W, G, 3000]], [[W, G, 3000, 1n, 4n], [W, G, 3000, 2n, 8n]]));
+    const q = new GnoSwapQuoter(new GnoRpc({ fetch, sleep: noSleep }), { maxQuotes: 1 });
+    expect(await q.quote(W, G, 1n)).toEqual({ out: 4n, fee: 3000 });
+    expect(q.truncated).toBe(false);
+    expect(await q.quote(W, G, 2n)).toBeNull();
     expect(q.truncated).toBe(true);
   });
+
+  it('a fresh quoter asks DrySwapRoute again instead of using the cache', async () => {
+    const { fetch, calls } = fakeFetch(poolRoutes([[W, G, 3000]], [[W, G, 3000, 100n, 433n]]));
+    const rpc = new GnoRpc({ fetch, sleep: noSleep });
+    const dry = () => calls.filter((c) => c.data?.includes('DrySwapRoute')).length;
+    await new GnoSwapQuoter(rpc).quote(W, G, 100n);
+    await new GnoSwapQuoter(rpc).quote(W, G, 100n);
+    expect(dry()).toBe(1);
+    await new GnoSwapQuoter(rpc, { quoteCacheMs: 0 }).quote(W, G, 100n);
+    expect(dry()).toBe(2);
+  });
+
+  it('a pair with no pool costs no quote', async () => {
+    const O = TOKENS.OBOL;
+    const D = TOKENS.DRACHMA;
+    const { fetch, calls } = fakeFetch(poolRoutes([[W, G, 3000]], [[W, G, 3000, 100n, 433n]], [[O, D]]));
+    const q = new GnoSwapQuoter(new GnoRpc({ fetch, sleep: noSleep }), { maxQuotes: 1 });
+    for (let i = 1; i <= 20; i++) expect(await q.quote(O, D, BigInt(i))).toBeNull();
+    expect(await q.quote(W, G, 100n)).toEqual({ out: 433n, fee: 3000 });
+    expect(q.truncated).toBe(false);
+    expect(calls.filter((c) => c.data?.includes('DrySwapRoute'))).toHaveLength(1);
+  });
 });
+
+/**
+ * Routes for fakeFetch: `pools` lists [a, b, fee] that exist; `dry` lists
+ * [in, out, fee, amountIn, amountOut]; `empty` lists pairs to answer "no pool"
+ * for at every tier. Pairs in `pools` answer false at their other tiers.
+ */
+function poolRoutes(pools: Array<[string, string, number]>, dry: Array<[string, string, number, bigint, bigint]>, empty: Array<[string, string]> = []) {
+  const routes: Record<string, unknown> = {};
+  const pairs = [...pools.map(([a, b]) => [a, b] as [string, string]), ...empty];
+  for (const [a, b] of pairs) {
+    const [x, y] = a <= b ? [a, b] : [b, a];
+    for (const fee of GNOSWAP_FEE_TIERS) {
+      const has = pools.some(([p, r, f]) => f === fee && ((p === x && r === y) || (p === y && r === x)));
+      routes[`vm/qeval gno.land/r/gnoswap/pool.ExistsPoolPath(GetPoolPath("${x}","${y}",${fee}))`] = abciOk(`(${has} bool)`);
+    }
+  }
+  for (const [a, b, fee, amt, out] of dry) {
+    routes[`vm/qeval gno.land/r/gnoswap/router.DrySwapRoute("${a}","${b}","${amt}","EXACT_IN","${a}:${b}:${fee}","100","0")`] = abciOk(
+      `("${amt}" string)\n("${out}" string)\n(undefined)`,
+    );
+  }
+  return routes;
+}
 
 describe('findBridgedRings', () => {
   // Ann gives 100 OBOL and wants at least 400 GNS. Bo gives 100 wugnot and
@@ -117,6 +164,22 @@ describe('findBridgedRings', () => {
   it('skips offer sets already settled directly', async () => {
     const direct: Ring[] = [{ ids: [1, 2] }];
     expect((await findBridgedRings(book, fakeQuote, { direct })).rings).toEqual([]);
+  });
+
+  it('pairs with no pool do not use up the quotes a real bridged ring needs', async () => {
+    // Offer 1 wants DRACHMA; offers 2 to 17 give distinct amounts of OBOL and
+    // close a two-offer path with it, so each asks for an OBOL to DRACHMA
+    // quote. No pool has that pair. Offers 30 and 31 make a real ring through
+    // the wugnot and GNS pool.
+    const FOO = 'gno.land/r/foo/bar.FOO';
+    const noise = [offer(1, 'z', tok(FOO, 1), tok(TOKENS.DRACHMA, 1))];
+    for (let i = 2; i <= 17; i++) noise.push(offer(i, `o${i}`, tok(OBOL, 10 + i), tok(FOO, 1)));
+    const real = [offer(30, 'ann', tok(OBOL, 100), tok(G, 400)), offer(31, 'bo', tok(W, 100), tok(OBOL, 100))];
+    const { fetch } = fakeFetch(poolRoutes([[W, G, 3000]], [[W, G, 3000, 100n, 433n]], [[OBOL, TOKENS.DRACHMA]]));
+    const q = new GnoSwapQuoter(new GnoRpc({ fetch, sleep: noSleep }), { maxQuotes: 16, maxPairs: 8 });
+    const res = await findBridgedRings([...noise, ...real], q.quote);
+    expect(res.rings.map((r) => r.ids)).toEqual([[30, 31]]);
+    expect(q.truncated).toBe(false);
   });
 
   it('treats a failing quote as no pool', async () => {

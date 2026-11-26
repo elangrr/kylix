@@ -15,7 +15,7 @@ import {
 } from './parse.ts';
 import type { GnoValue } from './parse.ts';
 import { GnoRpc, VmError } from './rpc.ts';
-import { findBridgedRings, findRings, selectRings } from './rings.ts';
+import { findBridgedRings, findRings, prepareBook, rankRings, selectRings } from './rings.ts';
 import type { FindOptions, Quote, Ring } from './rings.ts';
 
 export type AssetKind = 'fungible' | 'item';
@@ -319,13 +319,13 @@ export class KylixClient {
     return parseGetOffer(await this.rpc.qeval(this.kylix, `GetOffer(${assertOfferId(id)})`));
   }
 
-  /** Whether each offer's owner could deliver now, in batches of 50. */
-  async deliverable(ids: number[]): Promise<Map<number, DeliverableStatus>> {
+  /** Whether each offer's owner could deliver now, in batches of 50. `cacheMs: 0` always asks. */
+  async deliverable(ids: number[], opts: { cacheMs?: number } = {}): Promise<Map<number, DeliverableStatus>> {
     const out = new Map<number, DeliverableStatus>();
     const unique = [...new Set(ids.map(assertOfferId))];
     for (let i = 0; i < unique.length; i += LIMITS.deliverableBatch) {
       const batch = unique.slice(i, i + LIMITS.deliverableBatch);
-      const text = await this.rpc.qeval(this.kylix, `Deliverable(${goString(batch.join(','))})`, { cacheMs: 2_000 });
+      const text = await this.rpc.qeval(this.kylix, `Deliverable(${goString(batch.join(','))})`, { cacheMs: opts.cacheMs ?? 2_000 });
       for (const s of parseDeliverable(qevalString(text)).offers) out.set(s.id, s);
     }
     return out;
@@ -425,10 +425,30 @@ export class KylixClient {
     return out;
   }
 
-  /** The relic ids an address holds. */
+  /** How many demo relics an address holds. */
+  async relicCount(address: string): Promise<number> {
+    return Number(qevalInt(await this.rpc.qeval(this.demo, `relics.BalanceOf(address(${goString(assertAddress(address))}))`)));
+  }
+
+  /**
+   * The relic ids an address holds. Asks how many it holds first: none means
+   * no scan, and the scan stops once it has found them all.
+   */
   async relicsOf(address: string): Promise<string[]> {
-    assertAddress(address);
-    return (await this.relicOwners()).filter((r) => r.owner === address).map((r) => r.id);
+    const want = await this.relicCount(address);
+    if (want <= 0) return [];
+    const supply = Number(qevalInt(await this.rpc.qeval(this.demo, 'relics.TotalSupply()')));
+    const out: string[] = [];
+    for (let start = 1; start <= supply && out.length < want; start += 25) {
+      const ids: string[] = [];
+      for (let n = start; n <= Math.min(supply, start + 24); n++) ids.push(`relic-${n}`);
+      const expr = ids.map((id) => `string(OwnerOfRelic(${goString(id)}))`).join('+","+');
+      const owners = qevalString(await this.rpc.qeval(this.demo, expr)).split(',');
+      ids.forEach((id, i) => {
+        if (owners[i] === address) out.push(id);
+      });
+    }
+    return out;
   }
 
   /**
@@ -476,7 +496,8 @@ export class KylixClient {
     if (dot <= 0) return null;
     const pkgPath = asset.key.slice(0, dot);
     const symbol = asset.key.slice(dot + 1);
-    if (pkgPath === this.demo) return { kind: 'kylixdemo', pkgPath, symbol };
+    // The demo realm holds two tokens and takes the symbol; anything else there cannot be approved.
+    if (pkgPath === this.demo) return symbol === 'OBOL' || symbol === 'DRACHMA' ? { kind: 'kylixdemo', pkgPath, symbol } : null;
     let funcs;
     try {
       funcs = await this.rpc.qfuncs(pkgPath);
@@ -500,21 +521,38 @@ export class KylixClient {
    * GnoSwap hop; keeps those whose every offer is deliverable now; and picks
    * a non-overlapping set (longest first, direct before bridged, then oldest
    * offers).
+   *
+   * Deliverable is asked about at most `maxChecks` offers (default 200, four
+   * requests), taken from the rings in the order they would be picked.
+   * Rings with an offer past that are left out, and `checksCut` says so.
    */
   async readyRings(
     graph?: Graph,
-    opts: FindOptions & { quote?: Quote } = {},
-  ): Promise<{ graph: Graph; rings: Ring[]; status: Map<number, DeliverableStatus> }> {
+    opts: FindOptions & { quote?: Quote; maxChecks?: number } = {},
+  ): Promise<{ graph: Graph; rings: Ring[]; status: Map<number, DeliverableStatus>; checksCut: boolean }> {
     const g = graph ?? (await this.graph());
-    const { quote, ...findOpts } = opts;
-    const found = findRings(g.offers, { height: g.height, collections: g.collections, ...findOpts });
+    const { quote, maxChecks = 200, ...rest } = opts;
+    const findOpts: FindOptions = { height: g.height, collections: g.collections, ...rest };
+    const book = prepareBook(g.offers, findOpts);
+    const found = findRings(book, findOpts);
     if (quote) {
-      const bridged = await findBridgedRings(g.offers, quote, { height: g.height, collections: g.collections, ...findOpts, direct: found.rings });
+      const bridged = await findBridgedRings(book, quote, { ...findOpts, direct: found.rings });
       found.rings.push(...bridged.rings);
     }
-    const ids = [...new Set(found.rings.flatMap((r) => r.ids))];
-    const status = ids.length ? await this.deliverable(ids) : new Map<number, DeliverableStatus>();
-    const ready = found.rings.filter((r) => r.ids.every((id) => status.get(id)?.deliverable === true));
-    return { graph: g, rings: selectRings(ready), status };
+    const checked = new Set<number>();
+    const candidates: Ring[] = [];
+    let checksCut = false;
+    for (const r of rankRings(found.rings)) {
+      const fresh = r.ids.filter((id) => !checked.has(id));
+      if (checked.size + fresh.length > maxChecks) {
+        checksCut = true;
+        continue;
+      }
+      fresh.forEach((id) => checked.add(id));
+      candidates.push(r);
+    }
+    const status = checked.size ? await this.deliverable([...checked]) : new Map<number, DeliverableStatus>();
+    const ready = candidates.filter((r) => r.ids.every((id) => status.get(id)?.deliverable === true));
+    return { graph: g, rings: selectRings(ready), status, checksCut };
   }
 }

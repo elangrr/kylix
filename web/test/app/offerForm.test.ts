@@ -64,6 +64,32 @@ describe('validateOffer', () => {
     expect(ok).toMatchObject({ ok: true, give: { key: 'gno.land/r/foo/bar.BAZ', amount: 7n } });
   });
 
+  it('accepts hyphens where gno paths and grc20 symbols allow them', () => {
+    expect(validTokenKey('gno.land/r/nym-kylix000/kylixdemo.OBOL')).toBe(true);
+    expect(validTokenKey('gno.land/r/nym-moultest123/x/grc20faucet/v0.BLUE')).toBe(true);
+    expect(validTokenKey('gno.land/r/foo/bar.MY-TOK')).toBe(true);
+    expect(validTokenKey('gno.land/r/foo_bar/baz.X_1')).toBe(true);
+    // Segments start with a letter and never start, end or double a separator.
+    expect(validTokenKey('gno.land/r/-foo/bar.X')).toBe(false);
+    expect(validTokenKey('gno.land/r/foo-/bar.X')).toBe(false);
+    expect(validTokenKey('gno.land/r/foo--bar/baz.X')).toBe(false);
+    expect(validTokenKey('gno.land/r/9foo/bar.X')).toBe(false);
+    expect(validTokenKey('gno.land/r/Foo/bar.X')).toBe(false);
+    // grc20 symbols: 1 to 11 characters.
+    expect(validTokenKey('gno.land/r/foo/bar.ABCDEFGHIJK')).toBe(true);
+    expect(validTokenKey('gno.land/r/foo/bar.ABCDEFGHIJKL')).toBe(false);
+    expect(validTokenKey('gno.land/r/foo/bar.')).toBe(false);
+  });
+
+  it('refuses a known token typed as "another token", and reads other tokens in base units', () => {
+    const gns = validateOffer(form({ giveToken: OTHER_TOKEN, giveTokenOther: TOKENS.GNS, giveAmount: '1000000', wantAmount: '1' }), { height: H });
+    expect(gns).toMatchObject({ ok: false, errors: { giveTokenOther: 'This is GNS. Choose GNS from the token list instead.' } });
+    const want = validateOffer(form({ giveAmount: '1', wantToken: OTHER_TOKEN, wantTokenOther: TOKENS.OBOL, wantAmount: '1' }), { height: H });
+    expect(want).toMatchObject({ ok: false, errors: { wantTokenOther: expect.stringContaining('Choose OBOL') } });
+    const other = validateOffer(form({ giveAmount: '1', wantToken: OTHER_TOKEN, wantTokenOther: 'gno.land/r/demo/tokens.FOO', wantAmount: '1.5' }), { height: H });
+    expect(other).toMatchObject({ ok: false, errors: { wantAmount: 'This token has no decimals. Enter a whole number.' } });
+  });
+
   it('gives an item the account holds, for a token', () => {
     const items = [`${PATHS.kylixdemo}#relic-1`];
     const r = validateOffer(form({ giveKind: 'item', giveItem: items[0], wantAmount: '100', wantToken: TOKENS.OBOL }), { height: H, items });

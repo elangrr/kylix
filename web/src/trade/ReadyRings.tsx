@@ -21,7 +21,7 @@ export function ReadyRings({ market, address, tx }: Props) {
           address,
           ring.offers,
           ring.bridge ? { hop: ring.bridge.hop, feeTier: ring.bridge.feeTier } : undefined,
-          ring.bridge ? quoter().quote : undefined,
+          ring.bridge ? quoter(chain(), { fresh: true }).quote : undefined,
         ),
     )
   }
@@ -35,6 +35,16 @@ export function ReadyRings({ market, address, tx }: Props) {
       {!m && !market.error && <p>Reading the book…</p>}
       {market.error && <p className="form-error">Could not read the book: {market.error}</p>}
       {m && m.rings.length === 0 && <p>No ring is ready right now.</p>}
+      {m && (m.quotesCut || m.checksCut) && (
+        <p className="panel-note">
+          {[
+            m.checksCut && 'The book has more possible rings than this page checks with the realm in one read, so some ready rings may be missing here.',
+            m.quotesCut && 'This read used up its GnoSwap quotes, so some rings with a swap may be missing here.',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        </p>
+      )}
       {m && m.rings.length > 0 && (
         <div className="ring-grid ring-grid-app">
           {m.rings.map((ring) => (

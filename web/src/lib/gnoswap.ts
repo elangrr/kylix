@@ -39,11 +39,13 @@ export function parseDrySwap(text: string): bigint | null {
 }
 
 export interface QuoterOptions {
-  /** Distinct uncached quotes allowed over this quoter's life. Default 24. */
+  /** DrySwapRoute calls allowed over this quoter's life (one per fee tier with a pool). Default 24. */
   maxQuotes?: number;
   /** Distinct token pairs whose pools may be looked up. Default 12. */
   maxPairs?: number;
   feeTiers?: readonly number[];
+  /** How long the RPC may answer a DrySwapRoute from its cache. Default 15 s; 0 always asks. */
+  quoteCacheMs?: number;
 }
 
 export class GnoSwapQuoter {
@@ -51,8 +53,11 @@ export class GnoSwapQuoter {
   private readonly maxQuotes: number;
   private readonly maxPairs: number;
   private readonly tiers: readonly number[];
+  private readonly quoteCacheMs: number;
   private readonly pairs = new Map<string, Promise<number[]>>();
   private readonly quotes = new Map<string, Promise<SwapQuote | null>>();
+  /** DrySwapRoute calls made or reserved so far. */
+  private dryCalls = 0;
   /** Set when a limit stopped a lookup; the answer was null for that reason. */
   truncated = false;
 
@@ -61,6 +66,7 @@ export class GnoSwapQuoter {
     this.maxQuotes = opts.maxQuotes ?? 24;
     this.maxPairs = opts.maxPairs ?? 12;
     this.tiers = opts.feeTiers ?? GNOSWAP_FEE_TIERS;
+    this.quoteCacheMs = opts.quoteCacheMs ?? 15_000;
   }
 
   /** The fee tiers with a pool for the pair, in either order. */
@@ -88,23 +94,28 @@ export class GnoSwapQuoter {
     return p;
   }
 
-  /** The best quote across the pair's pools for an exact input. */
+  /**
+   * The best quote across the pair's pools for an exact input. A pair with no
+   * pool costs no quote: only DrySwapRoute calls count against maxQuotes.
+   */
   quote: QuoteFn = (tokenIn, tokenOut, amountIn) => {
     if (!tokenIn || !tokenOut || tokenIn === tokenOut || amountIn <= 0n) return Promise.resolve(null);
     const key = `${tokenIn}\n${tokenOut}\n${amountIn}`;
     let p = this.quotes.get(key);
     if (!p) {
-      if (this.quotes.size >= this.maxQuotes) {
-        this.truncated = true;
-        return Promise.resolve(null);
-      }
       p = (async () => {
         const tiers = await this.poolTiers(tokenIn, tokenOut);
+        if (tiers.length === 0) return null;
+        if (this.dryCalls + tiers.length > this.maxQuotes) {
+          this.truncated = true;
+          return null;
+        }
+        this.dryCalls += tiers.length;
         let best: SwapQuote | null = null;
         for (const fee of tiers) {
           const route = `${tokenIn}:${tokenOut}:${fee}`;
           const expr = `DrySwapRoute(${[tokenIn, tokenOut, String(amountIn), 'EXACT_IN', route, '100', '0'].map(goString).join(',')})`;
-          const out = parseDrySwap(await this.rpc.qeval(GNOSWAP_ROUTER, expr, { cacheMs: 15_000 }));
+          const out = parseDrySwap(await this.rpc.qeval(GNOSWAP_ROUTER, expr, { cacheMs: this.quoteCacheMs }));
           if (out !== null && (!best || out > best.out || (out === best.out && fee < best.fee))) best = { out, fee };
         }
         return best;

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Collection } from '../lib/kylix.ts'
-import { shortAddress, tokenAmountText } from '../app/assets.ts'
+import { displayText, shortAddress, tokenAmountText } from '../app/assets.ts'
 import { safePicture, type RingView } from '../app/market.ts'
 import { AssetLabel } from './AssetLabel.tsx'
 import { RingGlyph } from './RingGlyph.tsx'
@@ -17,7 +17,7 @@ interface RingCardProps {
 function Who({ address, me }: { address: string; me?: string }) {
   if (address === me) return <strong>You</strong>
   return (
-    <strong className="mono" title={address}>
+    <strong className="mono" title={displayText(address)}>
       {shortAddress(address)}
     </strong>
   )

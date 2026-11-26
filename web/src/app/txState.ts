@@ -5,6 +5,7 @@
 
 import { RpcError, VmError } from '../lib/rpc.ts'
 import { WalletError, cleanChainError } from '../lib/wallet.ts'
+import { displayText } from './assets.ts'
 
 export interface TxMeta {
   /** What the transaction does, in a few words: "Settle ring 4, 5, 6". */
@@ -74,8 +75,16 @@ export function txSentence(s: TxState): string {
   }
 }
 
-/** A readable reason for any error a transaction can end with. */
+/**
+ * A readable reason for any error a transaction or a read can end with. Its
+ * text can carry chain strings (panic text, names, reasons), so it is cleaned
+ * with displayText.
+ */
 export function errorText(e: unknown): string {
+  return displayText(rawErrorText(e))
+}
+
+function rawErrorText(e: unknown): string {
   if (e instanceof WalletError) {
     switch (e.kind) {
       case 'rejected':

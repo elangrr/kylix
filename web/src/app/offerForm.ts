@@ -75,8 +75,14 @@ export type FormResult =
   | { ok: true; give: Asset; want: Asset; expiry: number }
   | { ok: false; errors: FormErrors }
 
-// A grc20reg key: a realm path, a dot, a symbol.
-const TOKEN_KEY = /^gno\.land\/r\/[a-z0-9_]+(?:\/[a-z0-9_]+)*(?:\/v[0-9]+)?\.[A-Za-z0-9_]{1,32}$/
+// A grc20reg key is the token realm's path, a dot and the token's symbol
+// (fqname.Construct in r/nt/grc20reg/v0). r/kylix accepts any key grc20reg
+// knows. Each path segment follows gno's package path rule (Re_name in
+// gnovm/pkg/gnolang/mempackage.go): a lowercase letter, then letters and
+// digits, with single - or _ between them, as in nym-kylix000. The symbol is
+// what p/nt/grc20/v0 allows: 1 to 11 of A-Z a-z 0-9 _ -.
+const PATH_SEGMENT = '[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*'
+const TOKEN_KEY = new RegExp(`^gno\\.land/r/${PATH_SEGMENT}(?:/${PATH_SEGMENT})*\\.[A-Za-z0-9_-]{1,11}$`)
 const COLLECTION_KEY = /^gno\.land\/r\/[a-z0-9_-]+(?:\/[a-z0-9_.-]+)*$/
 
 export function validTokenKey(key: string): boolean {
@@ -93,12 +99,21 @@ function tokenSide(
   const key = choice === OTHER_TOKEN ? other.trim() : choice
   const otherField = side === 'give' ? 'giveTokenOther' : 'wantTokenOther'
   const amountField = side === 'give' ? 'giveAmount' : 'wantAmount'
-  if (choice === OTHER_TOKEN && !validTokenKey(key)) {
-    errors[otherField] = 'Enter the token’s full key: its realm path, a dot and its symbol, as gno.land/r/gnoland/wugnot.wugnot.'
-    return null
+  if (choice === OTHER_TOKEN) {
+    if (!validTokenKey(key)) {
+      errors[otherField] = 'Enter the token’s full key: its realm path, a dot and its symbol, as gno.land/r/demo/tokens.FOO.'
+      return null
+    }
+    // A known token typed here would be read in base units while the rest of
+    // the page writes it with decimals. Send the user to the list instead.
+    const known = knownToken(key)
+    if (known) {
+      errors[otherField] = `This is ${known.symbol}. Choose ${known.symbol} from the token list instead.`
+      return null
+    }
   }
-  // Tokens outside the known set are entered in base units.
-  const decimals = knownToken(key)?.decimals ?? 0
+  // "Another token" is always entered in base units.
+  const decimals = choice === OTHER_TOKEN ? 0 : (knownToken(key)?.decimals ?? 0)
   const amount = parseUnits(amountText, decimals)
   if (!amount.ok) {
     errors[amountField] = amount.error

@@ -1,5 +1,6 @@
 import { CHAIN_ID } from '../lib/config.ts'
 import type { WalletControls } from '../app/hooks.ts'
+import { displayText } from '../app/assets.ts'
 
 export function WalletPanel({ w }: { w: WalletControls }) {
   const v = w.view
@@ -26,7 +27,7 @@ export function WalletPanel({ w }: { w: WalletControls }) {
       {(v.status === 'wrong-network' || v.status === 'switching') && (
         <>
           <p>
-            Adena is on <span className="mono">{v.chainId || 'another network'}</span>. Kylix runs on the {CHAIN_ID}{' '}
+            Adena is on <span className="mono">{(v.chainId && displayText(v.chainId)) || 'another network'}</span>. Kylix runs on the {CHAIN_ID}{' '}
             testnet. Switching adds {CHAIN_ID} to Adena first if it does not know it.
           </p>
           <button type="button" className="btn" onClick={w.switchNetwork} disabled={v.status === 'switching'}>
@@ -37,7 +38,7 @@ export function WalletPanel({ w }: { w: WalletControls }) {
       {v.status === 'connected' && v.address && (
         <div className="wallet-connected">
           <p>
-            Connected on {CHAIN_ID} as <span className="mono address">{v.address}</span>
+            Connected on {CHAIN_ID} as <span className="mono address">{displayText(v.address)}</span>
           </p>
           <button type="button" className="btn btn-quiet" onClick={w.disconnect}>
             Disconnect

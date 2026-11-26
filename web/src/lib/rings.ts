@@ -103,16 +103,29 @@ function expiredOrNear(height: number, expiry: number, margin: number): boolean 
 
 // --- Search ----------------------------------------------------------------------
 
-interface Prepared {
-  cfg: ReturnType<typeof resolve>;
+/**
+ * The eligible offers in id order and who can give to whom directly. Build
+ * it once with prepareBook and pass it to findRings and findBridgedRings, so
+ * a refresh does the work once. Both searches must use the options it was
+ * made with.
+ */
+export interface PreparedBook {
+  readonly cfg: ReturnType<typeof resolve>;
+  /** Counts from preparing; each search starts from a copy. */
+  readonly stats: Readonly<FindStats>;
+  readonly offers: Offer[];
+  readonly adj: number[][];
+}
+
+interface Search {
+  cfg: PreparedBook['cfg'];
   stats: FindStats;
   truncate: (why: string) => void;
   offers: Offer[];
   adj: number[][];
 }
 
-/** The eligible offers in id order, and who can give to whom directly. */
-function prepare(input: Offer[], opts: FindOptions): Prepared {
+export function prepareBook(input: Offer[], opts: FindOptions = {}): PreparedBook {
   const cfg = resolve(opts);
   const stats: FindStats = {
     offersInput: input.length,
@@ -123,12 +136,7 @@ function prepare(input: Offer[], opts: FindOptions): Prepared {
     truncated: false,
     truncatedReason: '',
   };
-  const truncate = (why: string) => {
-    if (!stats.truncated) {
-      stats.truncated = true;
-      stats.truncatedReason = why;
-    }
-  };
+  const truncate = truncator(stats);
 
   // Eligible offers, in id order.
   const official = new Set((opts.collections ?? []).filter((c) => c.official).map((c) => c.key));
@@ -151,11 +159,28 @@ function prepare(input: Offer[], opts: FindOptions): Prepared {
   offers.sort((a, b) => a.id - b.id);
   stats.offersEligible = offers.length;
   const adj = offers.length < LIMITS.ringMinLegs ? [] : buildAdjacency(offers, cfg.maxFanout, cfg.maxPerOwner, truncate);
-  return { cfg, stats, truncate, offers, adj };
+  return { cfg, stats, offers, adj };
 }
 
-export function findRings(input: Offer[], opts: FindOptions = {}): FindResult {
-  const { cfg, stats, truncate, offers, adj } = prepare(input, opts);
+function truncator(stats: FindStats): (why: string) => void {
+  return (why) => {
+    if (!stats.truncated) {
+      stats.truncated = true;
+      stats.truncatedReason = why;
+    }
+  };
+}
+
+/** A search over a prepared book, with its own copy of the counts. */
+function startSearch(input: Offer[] | PreparedBook, opts: FindOptions): Search {
+  const book = Array.isArray(input) ? prepareBook(input, opts) : input;
+  const stats = { ...book.stats };
+  return { cfg: book.cfg, stats, truncate: truncator(stats), offers: book.offers, adj: book.adj };
+}
+
+/** Direct rings. `input` is the book, or a book made by prepareBook. */
+export function findRings(input: Offer[] | PreparedBook, opts: FindOptions = {}): FindResult {
+  const { cfg, stats, truncate, offers, adj } = startSearch(input, opts);
   const rings: Ring[] = [];
   if (offers.length < LIMITS.ringMinLegs) return { rings, stats };
 
@@ -262,8 +287,8 @@ export interface BridgedOptions extends FindOptions {
  * quoted (the quoter caps how many), and the rings whose quote holds are
  * kept, rotated so the smallest id is first.
  */
-export async function findBridgedRings(input: Offer[], quote: Quote, opts: BridgedOptions = {}): Promise<FindResult> {
-  const { cfg, stats, truncate, offers, adj } = prepare(input, opts);
+export async function findBridgedRings(input: Offer[] | PreparedBook, quote: Quote, opts: BridgedOptions = {}): Promise<FindResult> {
+  const { cfg, stats, truncate, offers, adj } = startSearch(input, opts);
   const rings: Ring[] = [];
   if (offers.length < LIMITS.ringMinLegs) return { rings, stats };
 
@@ -438,6 +463,12 @@ function fairPerStart(perStart: number, total: number, starts: number): number {
  * maxPerOwner offers per owner are kept (tokens: lowest minimum first). Then
  * neighbours are ordered oldest first, one offer per owner per round, and cut
  * at maxFanout.
+ *
+ * Each bucket is kept twice: by minimum (to find, by binary search, how many
+ * minimums u's amount meets) and by age, with each offer's rank by minimum.
+ * The neighbours of u are then read off the age order, skipping ranks past
+ * the cut, and the walk stops once the first round has maxFanout owners. So
+ * no bucket is copied or sorted per offer.
  */
 function buildAdjacency(offers: Offer[], maxFanout: number, maxPerOwner: number, truncate: (why: string) => void): number[][] {
   const wantItems = new Map<string, number[]>();
@@ -449,34 +480,85 @@ function buildAdjacency(offers: Offer[], maxFanout: number, maxPerOwner: number,
     if (list) list.push(i);
     else m.set(k, [i]);
   });
-  for (const [k, list] of wantItems) wantItems.set(k, capPerOwner(offers, list, maxPerOwner, truncate));
+
+  interface Bucket {
+    /** Minimums, ascending (tokens only). */
+    mins: bigint[];
+    /** Offer indexes, oldest first. */
+    byAge: number[];
+    /** Rank by minimum of each entry of byAge. */
+    rank: Int32Array;
+  }
+  const bucket = (byMin: number[], fungible: boolean): Bucket => {
+    const rankOf = new Map<number, number>();
+    byMin.forEach((v, r) => rankOf.set(v, r));
+    const byAge = [...byMin].sort((a, b) => a - b);
+    return {
+      mins: fungible ? byMin.map((v) => offers[v]!.want.amount) : [],
+      byAge,
+      rank: Int32Array.from(byAge, (v) => rankOf.get(v)!),
+    };
+  };
+  const items = new Map<string, Bucket>();
+  const tokens = new Map<string, Bucket>();
+  for (const [k, list] of wantItems) items.set(k, bucket(capPerOwner(offers, list, maxPerOwner, truncate), false));
   for (const [k, list] of wantTokens) {
     list.sort((a, b) => cmpBig(offers[a]!.want.amount, offers[b]!.want.amount) || a - b);
-    wantTokens.set(k, capPerOwner(offers, list, maxPerOwner, truncate));
+    tokens.set(k, bucket(capPerOwner(offers, list, maxPerOwner, truncate), true));
   }
 
+  const perOwner = new Map<string, number>();
   return offers.map((o, u) => {
-    let candidates: number[];
+    let b: Bucket | undefined;
+    let cut: number;
     if (o.give.kind === 'item') {
-      candidates = wantItems.get(itemKey(o.give)) ?? [];
+      b = items.get(itemKey(o.give));
+      cut = b ? b.byAge.length : 0;
     } else {
-      const list = wantTokens.get(o.give.key) ?? [];
-      let cut = 0;
-      while (cut < list.length && offers[list[cut]!]!.want.amount <= o.give.amount) cut++;
-      candidates = list.slice(0, cut);
+      b = tokens.get(o.give.key);
+      cut = b ? upperBound(b.mins, o.give.amount) : 0;
     }
-    let nb = candidates.filter((v) => {
-      if (v === u || offers[v]!.owner === o.owner) return false;
-      return !(o.give.kind === 'item' && offers[v]!.give.kind === 'item' && sameAsset(offers[v]!.give, o.give));
-    });
-    if (o.give.kind === 'fungible') nb.sort((a, b) => a - b);
-    nb = roundRobinByOwner(offers, nb);
+    if (!b || cut === 0) return [];
+    perOwner.clear();
+    const rounds: number[][] = [];
+    let full = false;
+    for (let j = 0; j < b.byAge.length; j++) {
+      if (b.rank[j]! >= cut) continue;
+      const v = b.byAge[j]!;
+      const w = offers[v]!;
+      if (v === u || w.owner === o.owner) continue;
+      if (o.give.kind === 'item' && w.give.kind === 'item' && sameAsset(w.give, o.give)) continue;
+      if (full) {
+        // One more neighbour than fits: the list is cut.
+        truncate('max_fanout');
+        break;
+      }
+      const r = perOwner.get(w.owner) ?? 0;
+      perOwner.set(w.owner, r + 1);
+      (rounds[r] ??= []).push(v);
+      // Every later neighbour lands in a later place than the first round's
+      // maxFanout entries, so the rest cannot make the cut.
+      if (maxFanout > 0 && rounds[0]!.length >= maxFanout) full = true;
+    }
+    let nb = rounds.flat();
     if (maxFanout > 0 && nb.length > maxFanout) {
       nb = nb.slice(0, maxFanout);
       truncate('max_fanout');
     }
     return nb;
   });
+}
+
+/** How many of the ascending `xs` are at most `x`. */
+function upperBound(xs: bigint[], x: bigint): number {
+  let lo = 0;
+  let hi = xs.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (xs[mid]! <= x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 function capPerOwner(offers: Offer[], idxs: number[], max: number, truncate: (why: string) => void): number[] {
@@ -582,17 +664,22 @@ function describe(a: Asset): string {
  * ring order.
  */
 export function selectRings(candidates: Ring[]): Ring[] {
-  const ranked = candidates.map((r) => ({ r, sorted: [...r.ids].sort((a, b) => a - b) }));
-  const bridged = (r: Ring) => (r.bridgedHop !== undefined && r.bridgedHop >= 0 ? 1 : 0);
-  ranked.sort((a, b) => b.r.ids.length - a.r.ids.length || bridged(a.r) - bridged(b.r) || cmpIds(a.sorted, b.sorted) || cmpIds(a.r.ids, b.r.ids));
   const used = new Set<number>();
   const out: Ring[] = [];
-  for (const { r } of ranked) {
+  for (const r of rankRings(candidates)) {
     if (r.ids.some((id) => used.has(id))) continue;
     r.ids.forEach((id) => used.add(id));
     out.push(r);
   }
   return out;
+}
+
+/** Rings in the order selectRings prefers them, as a new array. */
+export function rankRings(candidates: Ring[]): Ring[] {
+  const ranked = candidates.map((r) => ({ r, sorted: [...r.ids].sort((a, b) => a - b) }));
+  const bridged = (r: Ring) => (r.bridgedHop !== undefined && r.bridgedHop >= 0 ? 1 : 0);
+  ranked.sort((a, b) => b.r.ids.length - a.r.ids.length || bridged(a.r) - bridged(b.r) || cmpIds(a.sorted, b.sorted) || cmpIds(a.r.ids, b.r.ids));
+  return ranked.map((x) => x.r);
 }
 
 function cmpIds(a: number[], b: number[]): number {

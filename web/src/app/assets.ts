@@ -8,6 +8,27 @@
 import { PATHS, TOKENS } from '../lib/config.ts'
 import type { Asset, Collection } from '../lib/kylix.ts'
 
+// --- Text from the chain, made safe to show ---------------------------------------
+
+// Bidi controls (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069),
+// zero-width characters (U+200B to U+200D, U+2060, U+FEFF), soft hyphen and
+// other C0 and C1 controls. Any of them can reorder or hide what is shown.
+// eslint-disable-next-line no-control-regex -- removing control characters is the point
+const HIDDEN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb]/g
+// Tabs, line breaks and the wide or no-break spaces (U+00A0, U+1680,
+// U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000), in runs.
+const SPACES = /[\s\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/g
+
+/**
+ * Every string read from the chain or the wallet goes through this before
+ * it is shown: names, labels, keys, item ids, reasons and error text. It drops
+ * characters that reorder or hide text and turns any run of spaces into one
+ * plain space, so a name cannot push the rest of a line out of view.
+ */
+export function displayText(s: string): string {
+  return s.replace(HIDDEN, '').replace(SPACES, ' ').trim()
+}
+
 export interface KnownToken {
   key: string
   symbol: string
@@ -75,19 +96,25 @@ export interface AssetName {
 
 export function tokenAmountText(key: string, amount: bigint): string {
   const k = knownToken(key)
-  return k ? `${formatUnits(amount, k.decimals)} ${k.symbol}` : `${amount.toLocaleString('en-US')} units of ${key}`
+  return k ? `${formatUnits(amount, k.decimals)} ${k.symbol}` : `${amount.toLocaleString('en-US')} units of ${displayText(key)}`
 }
 
 export function assetName(a: Asset, collections: Collection[] = []): AssetName {
   if (a.kind === 'fungible') {
     const k = knownToken(a.key)
     if (k) return { main: `${formatUnits(a.amount, k.decimals)} ${k.symbol}`, note: k.note, unlisted: false }
-    return { main: `${a.amount.toLocaleString('en-US')} units`, note: 'unlisted token', key: a.key, unlisted: true }
+    return { main: `${a.amount.toLocaleString('en-US')} units`, note: 'unlisted token', key: displayText(a.key), unlisted: true }
   }
-  if (a.key === PATHS.kylixdemo) return { main: a.id, note: 'Kylix Relics, demo relic', unlisted: false }
+  const id = displayText(a.id)
+  if (a.key === PATHS.kylixdemo) return { main: id, note: 'Kylix Relics, demo relic', unlisted: false }
   const c = collections.find((x) => x.key === a.key)
-  if (!c) return { main: a.id, note: 'unregistered collection', key: a.key, unlisted: true }
-  return { main: a.id, note: `${c.name}, ${c.label || (c.official ? 'official' : 'third-party')}`, key: a.key, unlisted: !c.official }
+  if (!c) return { main: id, note: 'unregistered collection', key: displayText(a.key), unlisted: true }
+  return { main: id, note: `${displayText(c.name)}, ${collectionTrust(c)}`, key: displayText(a.key), unlisted: !c.official }
+}
+
+/** "official collection" or the realm's label for it, "third-party collection" otherwise. */
+export function collectionTrust(c: Pick<Collection, 'official' | 'label'>): string {
+  return displayText(c.label) || (c.official ? 'official' : 'third-party')
 }
 
 /** One line of plain text for an asset, for labels and announcements. */
@@ -98,7 +125,8 @@ export function assetPlain(a: Asset, collections: Collection[] = []): string {
 
 /** "g1wpca…vxds" */
 export function shortAddress(addr: string): string {
-  return addr.length > 14 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr
+  const a = displayText(addr)
+  return a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a
 }
 
 /** Rough time for a number of blocks, at about 5 seconds a block. */

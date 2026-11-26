@@ -159,8 +159,10 @@ describe('KylixClient', () => {
 
   it('reads relic owners and the faucet cooldown', async () => {
     const owners3 = `string(OwnerOfRelic("relic-1"))+","+string(OwnerOfRelic("relic-2"))+","+string(OwnerOfRelic("relic-3"))`;
-    const { k } = client({
+    const { k, calls } = client({
       [`vm/qeval ${D}.relics.TotalSupply()`]: abciOk('(3 int64)'),
+      [`vm/qeval ${D}.relics.BalanceOf(address("g14zcsd35u8wk46a0dq09hwk5m2744edxlx9qtsx"))`]: abciOk('(2 int64)\n(undefined)'),
+      [`vm/qeval ${D}.relics.BalanceOf(address("${NEW}"))`]: abciOk('(0 int64)\n(undefined)'),
       [`vm/qeval ${D}.${owners3}`]: relicOwners,
       [`vm/qeval ${D}.lastClaim.Get("${ANA}")`]: lastClaim,
       [`vm/qeval ${D}.lastClaim.Get("${NEW}")`]: lastClaimNone,
@@ -172,6 +174,10 @@ describe('KylixClient', () => {
       { id: 'relic-3', owner: 'g14zcsd35u8wk46a0dq09hwk5m2744edxlx9qtsx' },
     ]);
     expect(await k.relicsOf('g14zcsd35u8wk46a0dq09hwk5m2744edxlx9qtsx')).toEqual(['relic-2', 'relic-3']);
+    // An account with no relics costs one read and no scan.
+    const before = calls.length;
+    expect(await k.relicsOf(NEW)).toEqual([]);
+    expect(calls.slice(before).map((c) => c.data)).toEqual([`${D}.relics.BalanceOf(address("${NEW}"))`]);
 
     const claimed = await k.faucetStatus(ANA);
     expect(claimed.lastClaim).toBe(1422957);
@@ -189,6 +195,7 @@ describe('KylixClient', () => {
     });
     expect(await k.approveRoute({ kind: 'fungible', key: TOKENS.OBOL, id: '', amount: 1n })).toEqual({ kind: 'kylixdemo', pkgPath: D, symbol: 'OBOL' });
     expect(await k.approveRoute({ kind: 'item', key: D, id: 'relic-1', amount: 0n })).toEqual({ kind: 'relic', pkgPath: D });
+    expect(await k.approveRoute({ kind: 'fungible', key: `${D}.RELIC`, id: '', amount: 1n })).toBeNull();
     expect(await k.approveRoute({ kind: 'fungible', key: TOKENS.GNS, id: '', amount: 1n })).toEqual({ kind: 'spender-amount', pkgPath: 'gno.land/r/gnoswap/gns' });
     expect(await k.approveRoute({ kind: 'fungible', key: 'gno.land/r/nope.X', id: '', amount: 1n })).toBeNull();
     expect(await k.approveRoute({ kind: 'fungible', key: 'gno.land/r/odd.X', id: '', amount: 1n })).toBeNull();
@@ -222,6 +229,32 @@ describe('KylixClient', () => {
     });
     const r = await k.readyRings();
     expect(r.rings).toEqual([{ ids: [4, 5, 6] }]);
+  });
+
+  it('asks Deliverable about at most maxChecks offers, best rings first, and says it cut', async () => {
+    // 60 two-offer rings between distinct owners: offer 2n-1 gives A and
+    // wants B, offer 2n gives B and wants A, with amounts that only pair them.
+    const offers = [];
+    for (let n = 1; n <= 60; n++) {
+      offers.push({ id: 2 * n - 1, owner: `g1a${n}`, nonce: 1, give: { kind: 'fungible' as const, key: 'a.A', id: '', amount: BigInt(n) }, want: { kind: 'fungible' as const, key: 'b.B', id: '', amount: BigInt(n) }, expiry: 0, viaSession: false });
+      offers.push({ id: 2 * n, owner: `g1b${n}`, nonce: 1, give: { kind: 'fungible' as const, key: 'b.B', id: '', amount: BigInt(n) }, want: { kind: 'fungible' as const, key: 'a.A', id: '', amount: BigInt(n) }, expiry: 0, viaSession: false });
+    }
+    const graph = { realm: K, height: 0, offers, collections: [], total: offers.length };
+    const asked: number[][] = [];
+    const { k, calls } = client({});
+    k.deliverable = async (ids: number[]) => {
+      asked.push(ids);
+      return new Map(ids.map((id) => [id, { id, deliverable: true, reason: '' }]));
+    };
+    const r = await k.readyRings(graph, { officialOnly: false, maxChecks: 10 });
+    expect(calls).toHaveLength(0);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.length).toBeLessThanOrEqual(10);
+    expect(r.checksCut).toBe(true);
+    expect(r.rings.length).toBeGreaterThan(0);
+    expect(r.rings.every((ring) => ring.ids.every((id) => asked[0]!.includes(id)))).toBe(true);
+    const all = await k.readyRings(graph, { officialOnly: false });
+    expect(all.checksCut).toBe(false);
   });
 
   it('drops a ring when one offer cannot deliver', async () => {

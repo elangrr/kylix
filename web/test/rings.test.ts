@@ -180,3 +180,18 @@ describe('selectRings', () => {
     expect(picked).toEqual([{ ids: [1, 2, 3] }, { ids: [5, 6] }, { ids: [8, 9] }]);
   });
 });
+
+describe('findRings on a large book', () => {
+  it('6,000 offers alternating two tokens finish well under a second', () => {
+    const book: Offer[] = [];
+    for (let i = 1; i <= 6_000; i++) {
+      const even = i % 2 === 0;
+      book.push(offer(i, `owner-${i}`, tok(even ? A : B, 100 + (i % 97)), tok(even ? B : A, 50 + (i % 89))));
+    }
+    const t0 = performance.now();
+    const res = findRings(book, all);
+    const ms = performance.now() - t0;
+    expect(res.rings.length).toBeGreaterThan(0);
+    expect(ms).toBeLessThan(500);
+  });
+});

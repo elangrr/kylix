@@ -9,7 +9,10 @@ import type { Quote } from '../lib/rings.ts'
 import { tokenAmountText } from './assets.ts'
 
 /** The reads these builders need; a fake can stand in for tests. */
-export type ChainReads = Pick<KylixClient, 'approveRoute' | 'nextSlot' | 'approveTarget' | 'deliverable' | 'faucetStatus' | 'mnsName'>
+export type ChainReads = Pick<
+  KylixClient,
+  'approveRoute' | 'nextSlot' | 'approveTarget' | 'deliverable' | 'faucetStatus' | 'mnsName' | 'tokenBalance'
+>
 
 export interface PostRequest {
   caller: string
@@ -21,7 +24,9 @@ export interface PostRequest {
 /**
  * Approve and post in one transaction. Reads the offer's next address and,
  * for an item, the address its collection wants approved, right before
- * signing, so they match what PostIntent will check.
+ * signing, so they match what PostIntent will check. For a token, checks
+ * that grc20reg knows it and that the caller holds the amount, so a post the
+ * realm would refuse stops before the wallet opens.
  */
 export async function preparePost(chain: ChainReads, r: PostRequest): Promise<TxPlan> {
   const route = await chain.approveRoute(r.give)
@@ -31,6 +36,13 @@ export async function preparePost(chain: ChainReads, r: PostRequest): Promise<Tx
         ? 'This app cannot approve items of this collection. Approve it on the collection’s own page, then post on the realm’s page.'
         : 'This token has no Approve(spender, amount) function this app knows how to call.',
     )
+  }
+  if (r.give.kind === 'fungible') {
+    const bal = await chain.tokenBalance(r.give.key, r.caller)
+    if (bal === null) throw new Error(`No token is registered in grc20reg under ${r.give.key}.`)
+    if (bal < r.give.amount) {
+      throw new Error(`You hold ${tokenAmountText(r.give.key, bal)}, less than the ${tokenAmountText(r.give.key, r.give.amount)} this offer gives.`)
+    }
   }
   if (r.give.kind === 'item' && r.give.key === PATHS.adapterMns) {
     const n = await chain.mnsName(r.give.id)
@@ -56,7 +68,8 @@ export async function preparePost(chain: ChainReads, r: PostRequest): Promise<Tx
  * stopped being ready since the book was read fails here with the realm's
  * reason, before the wallet opens. For a ring with a GnoSwap hop, quotes the
  * swap again and settles through the pool that pays most now
- * (SettleRingVia); the realm still refuses a swap below the minimum.
+ * (SettleRingVia); the realm still refuses a swap below the minimum. Pass a
+ * quote that skips the cache (quoter(client, { fresh: true }).quote).
  */
 export async function prepareSettle(
   chain: ChainReads,
@@ -65,7 +78,11 @@ export async function prepareSettle(
   bridge?: { hop: number; feeTier: number },
   quote?: Quote,
 ): Promise<TxPlan> {
-  const status = await chain.deliverable(offers.map((o) => o.id))
+  // Asked fresh: a cached answer from the last poll could hide a change.
+  const status = await chain.deliverable(
+    offers.map((o) => o.id),
+    { cacheMs: 0 },
+  )
   const stuck = offers
     .map((o) => status.get(o.id) ?? ({ id: o.id, deliverable: false, reason: 'no answer' } as DeliverableStatus))
     .filter((s) => !s.deliverable)

@@ -177,16 +177,32 @@ export function cleanChainError(s: string): string {
 export function parseSendResult(data: unknown): SendResult {
   const d = (data ?? {}) as Record<string, unknown>;
   const hash = typeof d.hash === 'string' ? d.hash : '';
-  const deliver = d.deliver_tx as { ResponseBase?: { Error?: unknown; Data?: string | null; Log?: string }; GasUsed?: string; GasWanted?: string } | undefined;
-  if (!deliver) {
+  const check = d.check_tx as TxResponse | undefined;
+  const deliver = d.deliver_tx as TxResponse | undefined;
+  if (!deliver && !check) {
     const syncErr = d.error;
-    if (syncErr) throw new WalletError('failed', cleanChainError(String((syncErr as { value?: string }).value ?? d.Log ?? 'broadcast failed')), 'TRANSACTION_FAILED', 4001, data);
+    if (syncErr) throw new WalletError('failed', cleanChainError(errorValue(syncErr, String(d.Log || ''), 'broadcast failed')), 'TRANSACTION_FAILED', 4001, data);
     return { hash, committed: false, returned: [] };
   }
-  const base = deliver.ResponseBase ?? {};
+  // CheckTx refused it (bad sequence, fee, gas or signature): it never reached a block.
+  const checkBase = check?.ResponseBase ?? {};
+  if (checkBase.Error) {
+    throw new WalletError('failed', cleanChainError(errorValue(checkBase.Error, checkBase.Log, 'the chain refused the transaction')), 'TRANSACTION_FAILED', 4001, data);
+  }
+  const base = deliver?.ResponseBase ?? {};
   if (base.Error) {
-    const text = typeof (base.Error as { value?: unknown }).value === 'string' ? (base.Error as { value: string }).value : base.Log ?? 'transaction failed';
-    throw new WalletError('failed', cleanChainError(text), 'TRANSACTION_FAILED', 4001, data);
+    throw new WalletError('failed', cleanChainError(errorValue(base.Error, base.Log, 'transaction failed')), 'TRANSACTION_FAILED', 4001, data);
+  }
+  // A committed transaction is in a block. Without a height, nothing says it
+  // is, and nothing says it failed either: report it as sent, so the caller
+  // confirms it through the indexer. Calling it failed could lead the user to
+  // send it twice.
+  const height = Number(d.height);
+  if (!deliver || !Number.isSafeInteger(height) || height <= 0) {
+    if (hash === '') {
+      throw new WalletError('failed', 'The wallet answered without a block height or a transaction hash.', 'TRANSACTION_FAILED', 4001, data);
+    }
+    return { hash, committed: false, returned: [] };
   }
   let returned: GnoValue[] = [];
   if (base.Data) {
@@ -196,15 +212,34 @@ export function parseSendResult(data: unknown): SendResult {
       returned = [];
     }
   }
-  const height = Number(d.height);
   return {
     hash,
     committed: true,
-    ...(Number.isSafeInteger(height) ? { height } : {}),
+    height,
     ...(deliver.GasUsed ? { gasUsed: Number(deliver.GasUsed) } : {}),
     ...(deliver.GasWanted ? { gasWanted: Number(deliver.GasWanted) } : {}),
     returned,
   };
+}
+
+interface TxResponse {
+  ResponseBase?: { Error?: unknown; Data?: string | null; Log?: string };
+  GasUsed?: string;
+  GasWanted?: string;
+}
+
+/**
+ * The text of a TM2 error ({ "@type", value }): its value, else the log, else
+ * its type name ("InvalidSequenceError"), else the fallback. Empty strings
+ * count as missing.
+ */
+function errorValue(e: unknown, log: string | undefined, fallback: string): string {
+  if (typeof e === 'string' && e) return e;
+  const o = (e ?? {}) as { value?: unknown; '@type'?: unknown };
+  if (typeof o.value === 'string' && o.value) return o.value;
+  if (log) return log;
+  if (typeof o['@type'] === 'string' && o['@type']) return o['@type'].replace(/^.*[./]/, '');
+  return fallback;
 }
 
 /** The offer id a PostIntent returned, from a committed result. */
@@ -234,7 +269,11 @@ export class AdenaWallet implements Wallet {
   }
 
   isInstalled(): boolean {
-    return !!this.getAdena();
+    const a = this.getAdena();
+    // window.adena can appear after subscribers asked for events; register
+    // with it the first time it is seen.
+    if (a) this.listen(a);
+    return !!a;
   }
 
   /** The extension injects window.adena after the page starts; wait for it a little. */
@@ -247,6 +286,7 @@ export class AdenaWallet implements Wallet {
   private adena(): AdenaInjected {
     const a = this.getAdena();
     if (!a) throw new WalletError('not-installed', 'Adena is not installed in this browser');
+    this.listen(a);
     return a;
   }
 
@@ -255,7 +295,6 @@ export class AdenaWallet implements Wallet {
     if (r.status !== 'success' && r.type !== 'ALREADY_CONNECTED') throw adenaError(r, 'connect');
     const acc = await this.account();
     if (!acc) throw new WalletError('no-account', 'Connected, but Adena returned no account');
-    this.listen();
     return acc;
   }
 
@@ -329,9 +368,13 @@ export class AdenaWallet implements Wallet {
     return () => this.networkSubs.delete(cb);
   }
 
-  private listen(): void {
+  /**
+   * Registers with Adena once, as soon as window.adena exists. Called from
+   * every path that touches the extension, so a late injection still gets
+   * the listeners of whoever subscribed before it.
+   */
+  private listen(a: AdenaInjected | undefined = this.getAdena()): void {
     if (this.listening) return;
-    const a = this.getAdena();
     if (!a) return;
     this.listening = true;
     a.On('changedAccount', (v) => this.accountSubs.forEach((cb) => cb(v)));
