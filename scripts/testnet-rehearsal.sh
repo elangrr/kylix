@@ -811,10 +811,39 @@ step_session() {
     check "$(offer_open "$z" && echo 1 || echo 0)" "$KEY_ANA's own key cancelled offer $z"
 }
 
+step_seed() {
+  head1 "seed: leave a ring of three open offers on the page (the README story), unsettled"
+  # Same roles as the direct step, but nothing is settled: the home page then
+  # shows a ring that is ready, for a person or the solver to settle.
+  local owners kA kB kC relic k
+  owners=$(relic_owners)
+  for k in "$KEY_BEN" "$KEY_ANA" "$KEY_CLEO"; do
+    relic=$(awk -v a="$(addr "$k")" '$2 == a {print $1; exit}' <<<"$owners")
+    [ -n "$relic" ] && { kB=$k; break; }
+  done
+  [ -n "${kB:-}" ] || { fail "none of $KEY_ANA, $KEY_BEN, $KEY_CLEO holds a relic: run the claim step"; return; }
+  for k in "$KEY_ANA" "$KEY_BEN" "$KEY_CLEO"; do
+    [ "$k" = "$kB" ] && continue
+    if [ -z "${kA:-}" ]; then kA=$k; else kC=$k; fi
+  done
+  local B sB oA oB oC
+  B=$(addr "$kB")
+  say "  A=$kA gives 100 OBOL, wants >= 50 DRACHMA; B=$kB gives $relic, wants >= 100 OBOL; C=$kC gives 50 DRACHMA, wants $relic"
+  approve_tok seed-approve-A "$kA" OBOL 100 || return
+  post seed-post-A "$kA" fungible "$OBOL" "" 100 fungible "$DRACHMA" "" 50 || return; oA=$OFFER
+  sB=$(next_slot "$B")
+  tx_ok seed-approve-B "$kB" "$D" ApproveRelic "$sB" "$relic" || return
+  post seed-post-B "$kB" item "$D" "$relic" 0 fungible "$OBOL" "" 100 || return; oB=$OFFER
+  approve_tok seed-approve-C "$kC" DRACHMA 50 || return
+  post seed-post-C "$kC" fungible "$DRACHMA" "" 50 item "$D" "$relic" 0 || return; oC=$OFFER
+  [ "$DRY" = 1 ] && return
+  check "$(offer_open "$oA" && offer_open "$oB" && offer_open "$oC" && echo 0 || echo 1)" "offers $oA,$oB,$oC are open; ring page: $K:ring/$oA,$oB,$oC"
+}
+
 # ================================================================================
-STEPS="status claim direct refusals mns gnoswap sinopia notify session"
+STEPS="status claim direct refusals mns gnoswap sinopia notify session seed"
 [ $# -gt 0 ] || { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
-[ "$1" = all ] && set -- $STEPS
+[ "$1" = all ] && set -- ${STEPS% seed}
 for s in "$@"; do
   case " $STEPS " in *" $s "*) ;; *) say "unknown step '$s' (steps: $STEPS, or all)" >&2; exit 2 ;; esac
 done

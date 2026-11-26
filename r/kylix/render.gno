@@ -205,6 +205,10 @@ func offerTableWithCache(before uint64, limit int, cache map[string]string) (md 
 		page = append(page, o)
 		return false
 	})
+	if len(page) == 0 && before != 0 {
+		// A page past the oldest offer: the book may still hold newer ones.
+		return "No older open offers.\n", 0
+	}
 	return renderOfferRows(page, h, cache), next
 }
 
