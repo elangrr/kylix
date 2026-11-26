@@ -9,6 +9,7 @@ import type { Graph } from '../../src/lib/kylix.ts';
 import { findRings, verifyRing } from '../../src/lib/rings.ts';
 import { buildSettle } from '../../src/lib/tx.ts';
 import { isAddress, textFromBase64 } from '../../src/lib/parse.ts';
+import { GnoSwapQuoter } from '../../src/lib/gnoswap.ts';
 
 const rpc = new GnoRpc({ maxConcurrent: 2, cacheMs: 30_000 });
 const k = new KylixClient(rpc);
@@ -110,6 +111,22 @@ describe('onyx-1, read only', () => {
     expect(await k.approveRoute({ kind: 'fungible', key: TOKENS.WUGNOT, id: '', amount: 1n })).toEqual({ kind: 'spender-amount', pkgPath: PATHS.wugnot });
     expect(await k.approveRoute({ kind: 'fungible', key: TOKENS.GNS, id: '', amount: 1n })).toEqual({ kind: 'spender-amount', pkgPath: PATHS.gns });
     expect(await k.approveRoute({ kind: 'item', key: PATHS.kylixdemo, id: 'relic-1', amount: 0n })).toEqual({ kind: 'relic', pkgPath: PATHS.kylixdemo });
+  });
+
+  it('quotes the one GnoSwap pool on onyx-1, wugnot and GNS at fee 3000, both ways', async () => {
+    const q = new GnoSwapQuoter(rpc);
+    expect(await q.poolTiers(TOKENS.WUGNOT, TOKENS.GNS)).toEqual([3000]);
+    const there = await q.quote(TOKENS.WUGNOT, TOKENS.GNS, 1_000_000n);
+    expect(there?.fee).toBe(3000);
+    expect(there!.out).toBeGreaterThan(0n);
+    expect((await q.quote(TOKENS.GNS, TOKENS.WUGNOT, 1_000_000n))?.fee).toBe(3000);
+    expect(await q.quote(TOKENS.OBOL, TOKENS.DRACHMA, 10n)).toBeNull();
+  });
+
+  it('asks the nsnft adapter about an MNS name that does not exist', async () => {
+    const n = await k.mnsName('kylix-no-such-name*gno');
+    expect(n.owner).toBe('');
+    expect(n.unmovable).toMatch(/no record/);
   });
 
   it('kept the request count modest', () => {

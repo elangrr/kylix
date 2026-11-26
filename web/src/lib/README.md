@@ -1,23 +1,28 @@
-# kylix-web-lib
+# The chain and wallet library
 
-Reads the Kylix realm on onyx-1 from a browser and signs with Adena. `src/` is meant to be copied unchanged to `web/src/lib/`. It has no runtime dependencies: it uses `fetch`, `atob`/`btoa`, `TextEncoder`/`TextDecoder` and `AbortController`.
+Reads the Kylix realm on onyx-1 from a browser and signs with Adena. It has no runtime dependencies: it uses `fetch`, `atob`/`btoa`, `TextEncoder`/`TextDecoder` and `AbortController`. Its tests live in `web/test/` and run from `web/`:
 
 ```sh
-npm install
 npm run typecheck
 npm test            # unit tests against recorded fixtures
-npm run test:live   # reads the real onyx-1 realm; sends nothing
+npm run test:live   # reads the real onyx-1 realm and GnoSwap pool; sends nothing
 ```
 
 | File | What it does |
 |---|---|
-| `src/config.ts` | Chain id, RPC and indexer URLs, package paths, token keys, gas limits, deposit caps |
-| `src/parse.ts` | Parses qeval's `(value type)` output and Go-quoted strings; quotes values into expressions; validates addresses |
-| `src/rpc.ts` | JSON-RPC client: `qeval`, `qrender`, `qfuncs`, `status`, bank balances. Cache, de-duplication, at most 4 requests at once, backoff on 429 and network errors. `indexedTx` looks a transaction up in the indexer |
-| `src/kylix.ts` | Typed reads: the book (all pages), one offer, `Deliverable`, `NextSlot`, `ApproveTarget`, collections, the ring picture, balances, relics, the faucet cooldown, how to approve an asset, ready rings |
-| `src/rings.ts` | Direct rings of 2 to 6 offers, ported from `solver/ring`: finder, verifier, selector |
-| `src/tx.ts` | Pure builders: claim, approve and post (one transaction, two messages), settle, cancel, prune, each with gas, fee and deposit cap |
-| `src/wallet.ts` | The `Wallet` interface, `AdenaWallet` over `window.adena`, and `MockWallet` |
+| `config.ts` | Chain id, RPC and indexer URLs, package paths, token keys, gas limits, deposit caps |
+| `parse.ts` | Parses qeval's `(value type)` output and Go-quoted strings; quotes values into expressions; validates addresses |
+| `rpc.ts` | JSON-RPC client: `qeval`, `qrender`, `qfuncs`, `status`, bank balances. Cache, de-duplication, at most 4 requests at once, backoff on 429 and network errors. `indexedTx` looks a transaction up in the indexer |
+| `kylix.ts` | Typed reads: the book (all pages), one offer, `Deliverable`, `NextSlot`, `ApproveTarget`, collections, the ring picture, balances, relics, the faucet cooldown, who holds an MNS name and whether the nsnft adapter can move it (`mnsName`), how to approve an asset, ready rings (pass `quote` to include rings with a GnoSwap hop) |
+| `rings.ts` | Rings of 2 to 6 offers, ported from `solver/ring`: direct finder, finder for rings with one GnoSwap hop (`findBridgedRings`), verifier, selector (longest first, direct before bridged) |
+| `gnoswap.ts` | `GnoSwapQuoter`, ported from `solver/rpc/gnoswap.go`: which fee tiers have a pool for a pair (`ExistsPoolPath`), and the best `DrySwapRoute` output among them. Tokens are named by grc20reg keys. Caps quotes and pairs per quoter |
+| `tx.ts` | Pure builders: claim, approve and post (one transaction, two messages), settle (`SettleRingVia` for a ring with a GnoSwap hop), cancel, prune, each with gas, fee and deposit cap. Approvals: demo tokens, any token with `Approve(spender, amount)`, demo relics, and MNS names on the MNS ledger to the adapter's address |
+| `wallet.ts` | The `Wallet` interface, `AdenaWallet` over `window.adena`, and `MockWallet` |
+
+## Notes
+
+- DrySwapRoute answers an error as a pointer to a struct, which `parseQeval` cannot read. `parseDrySwap` reads the three lines one by one, as the solver does.
+- The MNS ledger (`gno.land/r/nym-mnsrehearsal001/nsnft/v2`) has no way to list a holder's names, so the app asks the user to type the name and checks the holder and lease with `mnsName` before signing.
 
 ## Adena, as read in its source
 

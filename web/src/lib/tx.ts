@@ -144,6 +144,12 @@ export function approveMessage(caller: string, give: Asset, spender: string, rou
       requireKind(give, 'item');
       if (give.key !== route.pkgPath) throw new Error('route does not match the collection');
       return call(caller, route.pkgPath, 'ApproveRelic', [spender, give.id], DEPOSIT.approve);
+    case 'mns':
+      // The approval is on the MNS ledger, for this one name, to the adapter's
+      // sub-address for the offer (ApproveTarget). An approval for all names is not used.
+      requireKind(give, 'item');
+      if (give.key !== route.adapter) throw new Error('route does not match the collection');
+      return call(caller, route.pkgPath, 'Approve', [spender, give.id], DEPOSIT.approve);
   }
 }
 

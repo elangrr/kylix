@@ -3,7 +3,8 @@ import { SiteFooter, REALM_URL } from '../components/SiteFooter.tsx'
 import { MeanderBand } from '../components/Meander.tsx'
 import { RingCard } from '../components/RingCard.tsx'
 import { Link } from '../Link.tsx'
-import { sampleRings } from '../sampleData.ts'
+import { loadMarket } from '../app/market.ts'
+import { usePolling } from '../app/hooks.ts'
 import { Stage } from '../story/Stage.tsx'
 import { steps, type Step } from '../story/steps.ts'
 import { useActiveStep } from '../story/hooks.ts'
@@ -72,6 +73,21 @@ function ScrollStory() {
 }
 
 function LiveRings() {
+  const market = usePolling('story', loadMarket, 60_000)
+  const rings = market.data?.rings ?? []
+  let intro: string
+  if (market.data) {
+    intro =
+      rings.length === 0
+        ? 'No ring is ready to settle on the testnet right now. Post an offer and you may close one.'
+        : `Read from the realm on the testnet at block ${market.data.graph.height.toLocaleString('en-US')}. ${
+            rings.length === 1 ? 'This ring is' : 'These rings are'
+          } ready, and anyone can settle ${rings.length === 1 ? 'it' : 'them'}.`
+  } else if (market.error) {
+    intro = `The rings could not be read from the testnet: ${market.error}`
+  } else {
+    intro = 'Reading the open offers from the realm on the testnet…'
+  }
   return (
     <section className="live" aria-labelledby="live-title">
       <MeanderBand className="meander-dark" />
@@ -81,17 +97,17 @@ function LiveRings() {
           Live rings
         </p>
         <h2 id="live-title" className="live-title">Rings ready to settle</h2>
-        <p className="live-intro">
-          These are samples that show how the list will look. The real list will come from the realm on the testnet.
-        </p>
-        <div className="ring-grid">
-          {sampleRings.map((ring) => (
-            <RingCard key={ring.id} ring={ring} />
-          ))}
-        </div>
+        <p className="live-intro" aria-live="polite">{intro}</p>
+        {rings.length > 0 && (
+          <div className="ring-grid">
+            {rings.map((ring) => (
+              <RingCard key={ring.key} ring={ring} collections={market.data?.graph.collections} />
+            ))}
+          </div>
+        )}
         <div className="live-actions">
           <Link to="/app" className="button">Start trading</Link>
-          <a className="text-link" href={REALM_URL}>Or trade now on the realm’s own page</a>
+          <a className="text-link" href={REALM_URL}>Or trade on the realm’s own page</a>
         </div>
       </div>
     </section>

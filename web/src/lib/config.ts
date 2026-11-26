@@ -22,6 +22,8 @@ export const PATHS = {
   ring: `gno.land/p/${NAMESPACE}/ring/v0`,
   adapterMns: `gno.land/r/${NAMESPACE}/adapters/nsnft`,
   adapterSinopia3: `gno.land/r/${NAMESPACE}/adapters/sinopia3`,
+  // The MNS name ledger the nsnft adapter moves names on (its registered target).
+  mnsLedger: 'gno.land/r/nym-mnsrehearsal001/nsnft/v2',
   grc20reg: 'gno.land/r/nt/grc20reg/v0',
   wugnot: 'gno.land/r/gnoland/wugnot',
   gns: 'gno.land/r/gnoswap/gns',

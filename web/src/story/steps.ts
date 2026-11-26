@@ -60,9 +60,9 @@ export const steps: Step[] = [
     label: 'GnoSwap',
     title: 'A swap on the way.',
     body: [
-      'Say Ben would rather have DRACHMA. Ana still gives 100 OBOL, and Kylix swaps it for DRACHMA on GnoSwap on the way to Ben, inside the same transaction. A ring can include one swap.',
+      'Say Ana pays with 100 wrapped GNOT instead, and Ben would rather have GNS. Kylix swaps Ana’s wrapped GNOT for GNS on GnoSwap on the way to Ben, inside the same transaction. A ring can include one swap.',
       'On a swap, Ben’s minimum is his price. Anyone can arrange the pool so that he receives exactly his minimum and no more, so he should ask for what he wants to receive.',
     ],
-    picture: 'On the way from Ana to Ben, the OBOL passes through a mixing bowl marked GnoSwap and comes out as DRACHMA.',
+    picture: 'On the way from Ana to Ben, Ana’s 100 wrapped GNOT passes through a mixing bowl marked GnoSwap and comes out as GNS.',
   },
 ]

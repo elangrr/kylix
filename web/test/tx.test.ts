@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  approveMessage,
   buildApproveAndPost,
   buildCancel,
   buildClaim,
@@ -114,6 +115,24 @@ describe('buildApproveAndPost', () => {
     const p = buildPost(ME, relic('x'), tok(TOKENS.OBOL, 1));
     expect(p.messages).toHaveLength(1);
     expect(p.gasWanted).toBe(35_000_000);
+  });
+});
+
+describe('approving an MNS name', () => {
+  const A = 'gno.land/r/nym-kylix000/adapters/nsnft';
+  const L = 'gno.land/r/nym-mnsrehearsal001/nsnft/v2';
+  const name: Asset = { kind: 'item', key: A, id: 'alice*gno', amount: 0n };
+  it('calls the ledger’s Approve(to, name) for the one name', () => {
+    expect(approveMessage(ME, name, SLOT, { kind: 'mns', pkgPath: L, adapter: A }).value).toMatchObject({
+      pkg_path: L,
+      func: 'Approve',
+      args: [SLOT, 'alice*gno'],
+      max_deposit: '500000ugnot',
+    });
+  });
+  it('refuses a route for another collection or a token', () => {
+    expect(() => approveMessage(ME, { ...name, key: D }, SLOT, { kind: 'mns', pkgPath: L, adapter: A })).toThrow(/collection/);
+    expect(() => approveMessage(ME, tok(TOKENS.OBOL, 1), SLOT, { kind: 'mns', pkgPath: L, adapter: A })).toThrow(/item/);
   });
 });
 

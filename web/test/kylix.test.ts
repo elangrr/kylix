@@ -192,7 +192,25 @@ describe('KylixClient', () => {
     expect(await k.approveRoute({ kind: 'fungible', key: TOKENS.GNS, id: '', amount: 1n })).toEqual({ kind: 'spender-amount', pkgPath: 'gno.land/r/gnoswap/gns' });
     expect(await k.approveRoute({ kind: 'fungible', key: 'gno.land/r/nope.X', id: '', amount: 1n })).toBeNull();
     expect(await k.approveRoute({ kind: 'fungible', key: 'gno.land/r/odd.X', id: '', amount: 1n })).toBeNull();
-    expect(await k.approveRoute({ kind: 'item', key: 'gno.land/r/nym-kylix000/adapters/nsnft', id: 'a*b', amount: 0n })).toBeNull();
+    expect(await k.approveRoute({ kind: 'item', key: 'gno.land/r/nym-kylix000/adapters/nsnft', id: 'a*b', amount: 0n })).toEqual({
+      kind: 'mns',
+      pkgPath: 'gno.land/r/nym-mnsrehearsal001/nsnft/v2',
+      adapter: 'gno.land/r/nym-kylix000/adapters/nsnft',
+    });
+    expect(await k.approveRoute({ kind: 'item', key: 'gno.land/r/nym-kylix000/adapters/sinopia3', id: '1', amount: 0n })).toBeNull();
+  });
+
+  it('asks the nsnft adapter who holds an MNS name and whether it can move', async () => {
+    const A = 'gno.land/r/nym-kylix000/adapters/nsnft';
+    const { k } = client({
+      [`vm/qeval ${A}.OwnerOf("alice*gno")`]: abciOk(`("${ANA}" .uverse.address)`),
+      [`vm/qeval ${A}.Unmovable("alice*gno")`]: abciOk('("" string)'),
+      [`vm/qeval ${A}.OwnerOf("bob*gno")`]: abciOk('("" .uverse.address)'),
+      [`vm/qeval ${A}.Unmovable("bob*gno")`]: abciOk('("the registry has no record of bob*gno" string)'),
+    });
+    expect(await k.mnsName('alice*gno')).toEqual({ name: 'alice*gno', owner: ANA, unmovable: '' });
+    expect(await k.mnsName('bob*gno')).toEqual({ name: 'bob*gno', owner: '', unmovable: 'the registry has no record of bob*gno' });
+    await expect(k.mnsName('nostar')).rejects.toThrow(/label/);
   });
 
   it('finds the recorded ring 4,5,6 ready to settle', async () => {

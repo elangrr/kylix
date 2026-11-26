@@ -740,6 +740,482 @@ h1:focus-visible {
   text-underline-offset: 4px;
 }
 
+/* Assets as text. Keys from the chain can be long, so they wrap anywhere. */
+.mono {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.address,
+.asset-key {
+  overflow-wrap: anywhere;
+}
+
+.asset-note {
+  font-size: 0.92em;
+  opacity: 0.8;
+}
+
+.asset-key {
+  display: block;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.asset-unlisted .asset-main {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.ring-picture {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 0 16px;
+  border-radius: 4px;
+}
+
+.ring-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-top: 18px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The trading app */
+.trade {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 40px) var(--gutter) clamp(48px, 6vw, 80px);
+}
+
+.trade-intro {
+  max-width: 46rem;
+  margin-bottom: clamp(24px, 3vw, 40px);
+}
+
+.trade-intro h1 {
+  font-size: clamp(2.2rem, 1.5rem + 2.6vw, 3.6rem);
+  margin-bottom: 14px;
+}
+
+.trade-intro p {
+  margin: 0 0 12px;
+}
+
+.trade-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(20px, 2.5vw, 36px);
+  align-items: start;
+}
+
+.trade-col {
+  display: grid;
+  gap: clamp(20px, 2.5vw, 32px);
+  min-width: 0;
+}
+
+.panel {
+  background: var(--glaze-raised);
+  border: 1.5px solid var(--clay-deep);
+  border-radius: 6px;
+  padding: clamp(16px, 2vw, 28px);
+  min-width: 0;
+}
+
+.panel-clay {
+  background: var(--clay);
+  color: var(--glaze);
+  border-color: var(--glaze);
+  --focus: var(--glaze);
+}
+
+.panel-title {
+  font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+  margin-bottom: 12px;
+}
+
+.panel-subtitle {
+  font-size: 1.25rem;
+  margin: 22px 0 8px;
+}
+
+.panel p {
+  margin: 0 0 14px;
+}
+
+.panel-note {
+  font-size: 0.98rem;
+  color: var(--cream-dim);
+}
+
+.panel-clay .panel-note {
+  color: var(--glaze);
+}
+
+.btn {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.06em;
+  background: var(--clay);
+  color: var(--glaze);
+  border: 2px solid var(--clay);
+  border-radius: 999px;
+  padding: 9px 22px;
+  min-height: 44px;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--clay-deep);
+}
+
+.btn:hover:not(:disabled) {
+  background: #dc8452;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.panel-clay .btn,
+.ring-card .btn {
+  background: var(--glaze);
+  color: var(--cream);
+  border-color: var(--glaze);
+}
+
+.panel-clay .btn:hover:not(:disabled),
+.ring-card .btn:hover:not(:disabled) {
+  background: #33261c;
+}
+
+.btn-quiet {
+  background: transparent;
+  color: var(--cream);
+  border: 1.5px solid var(--cream-dim);
+  box-shadow: none;
+  font-family: var(--font-label);
+  font-weight: 500;
+  font-size: 1rem;
+  padding: 6px 16px;
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: var(--glaze);
+  border-color: var(--cream);
+}
+
+.btn-danger {
+  border-color: var(--clay);
+  color: var(--clay);
+}
+
+.form-error,
+.field-error {
+  color: #ffb79a;
+  font-weight: 700;
+}
+
+.panel-clay .form-error,
+.live .form-error {
+  color: var(--miltos);
+}
+
+.wallet-connected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.wallet-connected p {
+  margin: 0;
+}
+
+.balances {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.balances div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  border-bottom: 1px solid var(--glaze);
+  padding: 4px 0;
+}
+
+.balances dt {
+  font-family: var(--font-label);
+  font-weight: 500;
+}
+
+.balances dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Form */
+.panel fieldset {
+  border: 1px solid var(--clay-deep);
+  border-radius: 4px;
+  margin: 0 0 18px;
+  padding: 12px 16px 4px;
+  min-width: 0;
+}
+
+.panel legend {
+  font-family: var(--font-label);
+  font-weight: 500;
+  color: var(--clay);
+  letter-spacing: 0.06em;
+  padding: 0 6px;
+}
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0 0 12px;
+}
+
+.choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.choice input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--clay);
+  margin: 0;
+}
+
+.field {
+  margin: 0 0 14px;
+}
+
+.field label {
+  display: block;
+  font-family: var(--font-label);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  min-height: 44px;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--glaze);
+  background: var(--cream);
+  border: 2px solid var(--cream-dim);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.field input.mono {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.92rem;
+}
+
+.field.has-error input,
+.field.has-error select {
+  border-color: #ffb79a;
+}
+
+.field-hint,
+.field-error {
+  font-size: 0.92rem;
+  margin: 4px 0 0 !important;
+}
+
+.field-hint {
+  color: var(--cream-dim);
+}
+
+.post-summary {
+  border-left: 2px solid var(--clay);
+  padding-left: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* The book */
+.offer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.offer {
+  border: 1px solid var(--clay-deep);
+  border-radius: 4px;
+  padding: 12px 14px;
+  background: var(--glaze);
+}
+
+.offer-mine {
+  border-color: var(--clay);
+  border-width: 2px;
+}
+
+.offer-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 16px;
+}
+
+.offer-title {
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.offer-title .tag {
+  background: var(--clay);
+  color: var(--glaze);
+}
+
+.offer-owner {
+  font-size: 0.95rem;
+  color: var(--cream-dim);
+}
+
+.offer-sides {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 6px 20px;
+  margin: 8px 0 10px !important;
+}
+
+.offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.offer-details {
+  margin-top: 12px;
+  border-top: 1px solid var(--clay-deep);
+  padding-top: 10px;
+  font-size: 0.98rem;
+}
+
+.offer-details dl {
+  margin: 0 0 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.offer-details dt {
+  font-family: var(--font-label);
+  font-weight: 500;
+  color: var(--clay);
+}
+
+.offer-details dd {
+  margin: 0 0 4px;
+}
+
+.ring-grid-app {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The transaction bar */
+.txbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--cream);
+  color: var(--glaze);
+  border-top: 3px solid var(--clay);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.45);
+  --focus: var(--glaze);
+}
+
+.txbar[hidden] {
+  display: none;
+}
+
+.txbar-failed {
+  border-top-color: var(--miltos);
+}
+
+.txbar-inner {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 10px var(--gutter);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
+}
+
+.txbar-text {
+  margin: 0;
+  flex: 1 1 22rem;
+  font-weight: 700;
+}
+
+.txbar-hash {
+  margin: 0;
+  flex: 1 1 100%;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+  order: 3;
+}
+
+.txbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.txbar .panel-clay .btn:hover:not(:disabled),
+.ring-card .btn:hover:not(:disabled) {
+  background: #33261c;
+}
+
+.txbar .btn-quiet {
+  color: var(--glaze);
+  border-color: var(--glaze);
+}
+
+.txbar .btn-quiet:hover {
+  background: var(--glaze);
+  color: var(--cream);
+}
+
 /* Phones and narrow tablets: the picture is pinned at the top, the text scrolls below it. */
 @media (max-width: 899px) {
   .story {
@@ -797,6 +1273,10 @@ h1:focus-visible {
 
   .placeholder-picture {
     max-width: 420px;
+  }
+
+  .trade-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

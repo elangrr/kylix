@@ -120,7 +120,7 @@ export function Stage({ scene, label }: StageProps) {
               <Krater />
             </g>
             <text className="svg-caption svg-caption-strong" x={CENTER} y={CENTER - 4} textAnchor="middle">GnoSwap</text>
-            <text className="svg-small" x={CENTER} y={CENTER + 22} textAnchor="middle">OBOL in, DRACHMA out</text>
+            <text className="svg-small" x={CENTER} y={CENTER + 22} textAnchor="middle">wugnot in, GNS out</text>
           </g>
 
           {/* Centre captions. */}
@@ -155,7 +155,7 @@ export function Stage({ scene, label }: StageProps) {
             </g>
           ))}
 
-          {/* What each trader wants. Ben's wish changes in the swap scene. */}
+          {/* What each trader wants. In the swap scene Ben wants GNS, drawn as a coin. */}
           {traders.map((t) => {
             const showBubble = scene === SCENE.traders || (scene === SCENE.swap && t.who === 'ben')
             const wants: Thing = scene === SCENE.swap && t.who === 'ben' ? 'drachma' : t.wants
@@ -166,6 +166,9 @@ export function Stage({ scene, label }: StageProps) {
                   <g transform="scale(0.72)" className="ghost">
                     <ThingGlyph thing={wants} />
                   </g>
+                  {scene === SCENE.swap && t.who === 'ben' && (
+                    <text className="svg-label" x={0} y={-36} textAnchor="middle">GNS</text>
+                  )}
                 </g>
               </g>
             )
@@ -183,7 +186,9 @@ export function Stage({ scene, label }: StageProps) {
                   <text className="seal-text" x={26} y={-23} textAnchor="middle">{i + 1}</text>
                 </g>
                 <ThingGlyph thing={t.gives} />
-                <text className="svg-label" x={0} y={44} textAnchor="middle">{t.label}</text>
+                <text className="svg-label" x={0} y={44} textAnchor="middle">
+                  {scene === SCENE.swap && t.who === 'ana' ? '100 wugnot' : t.label}
+                </text>
               </g>
             )
           })}

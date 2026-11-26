@@ -1,15 +1,15 @@
 import { RoundMeander } from '../story/art.tsx'
 import { arcPath, polar } from '../story/geometry.ts'
-import type { SampleRing } from '../sampleData.ts'
 
-// A small tondo for a ring card: one medallion per trader and an arrow from
-// each giver to the next. A swapped hop is drawn dashed.
-export function RingGlyph({ ring }: { ring: SampleRing }) {
-  const n = ring.legs.length
+// A small tondo for a ring card: one medallion per offer, marked with its
+// number, and an arrow from each giver to the next. A swapped hop is dashed.
+export function RingGlyph({ id, labels, swapHop = -1 }: { id: string; labels: string[]; swapHop?: number }) {
+  const n = labels.length
   const step = 360 / n
   const radius = 150
-  const gap = n === 2 ? 40 : 36
-  const markerId = `glyph-arrow-${ring.id}`
+  const gap = n === 2 ? 40 : n > 4 ? 24 : 36
+  const medal = n > 4 ? 50 : 64
+  const markerId = `glyph-arrow-${id.replace(/[^a-z0-9-]/gi, '-')}`
   return (
     <svg className="ring-glyph" viewBox="0 0 600 600" aria-hidden="true">
       <defs>
@@ -22,24 +22,25 @@ export function RingGlyph({ ring }: { ring: SampleRing }) {
       <RoundMeander radius={262} count={32} />
       <circle className="fill-clay" cx={300} cy={300} r={238} />
       <circle className="line-glaze" cx={300} cy={300} r={238} fill="none" strokeWidth={4} />
-      {ring.legs.map((leg, i) => {
+      {labels.map((_, i) => {
         const at = -90 + i * step
-        const receiver = ring.legs[(i + 1) % n]
         return (
           <path
-            key={`arc-${leg.trader}`}
-            className={`glyph-arc ${receiver?.swapped ? 'is-swap' : ''}`}
+            key={`arc-${i}`}
+            className={`glyph-arc ${i === swapHop ? 'is-swap' : ''}`}
             d={arcPath(radius, at + gap, at + step - gap)}
             markerEnd={`url(#${markerId})`}
           />
         )
       })}
-      {ring.legs.map((leg, i) => {
+      {labels.map((label, i) => {
         const [x, y] = polar(radius, -90 + i * step)
         return (
-          <g key={leg.trader} transform={`translate(${x} ${y})`}>
-            <circle className="fill-glaze" r={64} />
-            <text className="glyph-initial" y={24} textAnchor="middle">{leg.trader.charAt(0)}</text>
+          <g key={`medal-${i}`} transform={`translate(${x} ${y})`}>
+            <circle className="fill-glaze" r={medal} />
+            <text className="glyph-initial" y={label.length > 2 ? 16 : 24} textAnchor="middle" style={label.length > 2 ? { fontSize: 44 } : undefined}>
+              {label}
+            </text>
           </g>
         )
       })}

@@ -1,8 +1,8 @@
 // Finding rings among open offers, in the browser. A port of the direct-ring
 // part of the Go solver (solver/ring: finder.go, verify.go, select.go): the
 // same eligibility filter, neighbour lists, depth-first search, bounds,
-// verifier and selection order. Rings with a GnoSwap hop are not searched
-// here.
+// verifier and selection order. findBridgedRings ports the solver's second
+// phase: rings with one GnoSwap hop.
 //
 // A ring lists offer ids in ring order, smallest id first: offer ids[i] gives
 // its asset to the owner of ids[(i+1) % n].
@@ -12,6 +12,23 @@ import type { Asset, Collection, Offer } from './kylix.ts';
 
 export interface Ring {
   ids: number[];
+  /** For a ring with a GnoSwap hop: the index of the hop, ids[hop] -> ids[hop + 1]. */
+  bridgedHop?: number;
+  bridge?: BridgeInfo;
+}
+
+/** The GnoSwap hop of a bridged ring, as quoted when it was found. */
+export interface BridgeInfo {
+  fromOffer: number;
+  toOffer: number;
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: bigint;
+  wantMin: bigint;
+  /** What the best pool would pay, at least wantMin. */
+  expectedOut: bigint;
+  /** That pool's fee tier, for SettleRingVia. */
+  fee: number;
 }
 
 export interface FindOptions {
@@ -86,7 +103,16 @@ function expiredOrNear(height: number, expiry: number, margin: number): boolean 
 
 // --- Search ----------------------------------------------------------------------
 
-export function findRings(input: Offer[], opts: FindOptions = {}): FindResult {
+interface Prepared {
+  cfg: ReturnType<typeof resolve>;
+  stats: FindStats;
+  truncate: (why: string) => void;
+  offers: Offer[];
+  adj: number[][];
+}
+
+/** The eligible offers in id order, and who can give to whom directly. */
+function prepare(input: Offer[], opts: FindOptions): Prepared {
   const cfg = resolve(opts);
   const stats: FindStats = {
     offersInput: input.length,
@@ -124,10 +150,15 @@ export function findRings(input: Offer[], opts: FindOptions = {}): FindResult {
   }
   offers.sort((a, b) => a.id - b.id);
   stats.offersEligible = offers.length;
+  const adj = offers.length < LIMITS.ringMinLegs ? [] : buildAdjacency(offers, cfg.maxFanout, cfg.maxPerOwner, truncate);
+  return { cfg, stats, truncate, offers, adj };
+}
+
+export function findRings(input: Offer[], opts: FindOptions = {}): FindResult {
+  const { cfg, stats, truncate, offers, adj } = prepare(input, opts);
   const rings: Ring[] = [];
   if (offers.length < LIMITS.ringMinLegs) return { rings, stats };
 
-  const adj = buildAdjacency(offers, cfg.maxFanout, cfg.maxPerOwner, truncate);
   const perStart = fairPerStart(cfg.maxStepsPerStart, cfg.maxSteps, offers.length);
   const keys = new Set<string>();
 
@@ -205,6 +236,174 @@ export function findRings(input: Offer[], opts: FindOptions = {}): FindResult {
     dfs(1);
   }
   return { rings, stats };
+}
+
+// --- Rings with one GnoSwap hop ----------------------------------------------------
+
+/** Answers what a GnoSwap swap would pay, or null when no pool can do it (see gnoswap.ts). */
+export type Quote = (tokenIn: string, tokenOut: string, amountIn: bigint) => Promise<{ out: bigint; fee: number } | null>;
+
+export interface BridgedOptions extends FindOptions {
+  /** Rings already found directly; their offer sets are skipped. */
+  direct?: Ring[];
+  /** Most candidate paths kept for quoting. Default 2,000. */
+  maxCandidates?: number;
+}
+
+/**
+ * Rings in which exactly one hop swaps one token for another on GnoSwap, as
+ * the solver's second phase finds them. Every other hop is direct. The
+ * search starts at each offer that wants a token, walks direct hops, and at
+ * each step tests the closing hop back to the start as the swapped one: the
+ * last offer must give a token other than the one the start wants, and the
+ * quote for its whole amount must reach the start's minimum.
+ *
+ * The walk itself makes no requests. The distinct swaps it needs are then
+ * quoted (the quoter caps how many), and the rings whose quote holds are
+ * kept, rotated so the smallest id is first.
+ */
+export async function findBridgedRings(input: Offer[], quote: Quote, opts: BridgedOptions = {}): Promise<FindResult> {
+  const { cfg, stats, truncate, offers, adj } = prepare(input, opts);
+  const rings: Ring[] = [];
+  if (offers.length < LIMITS.ringMinLegs) return { rings, stats };
+
+  const giveKeys = new Set(offers.filter((o) => o.give.kind === 'fungible').map((o) => o.give.key));
+  let starts: number[] = [];
+  offers.forEach((o, i) => {
+    if (o.want.kind !== 'fungible' || giveKeys.size === 0) return;
+    if (giveKeys.size === 1 && giveKeys.has(o.want.key)) return;
+    starts.push(i);
+  });
+  starts = roundRobinByOwner(offers, starts);
+  const perStart = fairPerStart(cfg.maxStepsPerStart, cfg.maxSteps, starts.length);
+  const maxCandidates = opts.maxCandidates ?? 2_000;
+
+  const seen = new Set((opts.direct ?? []).map((r) => [...r.ids].sort((a, b) => a - b).join(',')));
+  const candidates: number[][] = [];
+  const path: number[] = [];
+  const owners: string[] = [];
+  const items: string[] = [];
+
+  for (const start of starts) {
+    if (candidates.length >= maxCandidates) {
+      truncate('max_candidates');
+      break;
+    }
+    if (cfg.maxSteps > 0 && stats.steps >= cfg.maxSteps) {
+      truncate('max_steps');
+      break;
+    }
+    const s = offers[start]!;
+    path.length = 0;
+    owners.length = 0;
+    items.length = 0;
+    path.push(start);
+    owners.push(s.owner);
+    if (s.give.kind === 'item') items.push(itemKey(s.give));
+    let startSteps = 0;
+    let stop = false;
+
+    const dfs = (depth: number): void => {
+      const u = path[depth - 1]!;
+      for (const v of adj[u] ?? []) {
+        if (stop) return;
+        if (perStart > 0 && startSteps >= perStart) {
+          truncate('max_steps_per_start');
+          stop = true;
+          return;
+        }
+        if (cfg.maxSteps > 0 && stats.steps >= cfg.maxSteps) {
+          truncate('max_steps');
+          stop = true;
+          return;
+        }
+        const o = offers[v]!;
+        if (path.includes(v) || owners.includes(o.owner)) continue;
+        const ik = o.give.kind === 'item' ? itemKey(o.give) : '';
+        if (ik && items.includes(ik)) continue;
+
+        startSteps++;
+        stats.steps++;
+        path.push(v);
+        owners.push(o.owner);
+        if (ik) items.push(ik);
+
+        const len = depth + 1;
+        if (len >= LIMITS.ringMinLegs && o.give.kind === 'fungible' && o.give.key !== s.want.key) {
+          if (candidates.length < maxCandidates) candidates.push([...path]);
+          else {
+            truncate('max_candidates');
+            stop = true;
+          }
+        }
+        if (!stop && len < LIMITS.ringMaxLegs) dfs(len);
+
+        path.pop();
+        owners.pop();
+        if (ik) items.pop();
+      }
+    };
+    dfs(1);
+  }
+
+  // Quote each distinct swap once, in the order the walk found them.
+  const quotes = new Map<string, Promise<{ out: bigint; fee: number } | null>>();
+  const qkey = (p: number[]) => {
+    const last = offers[p[p.length - 1]!]!;
+    return `${last.give.key}\n${offers[p[0]!]!.want.key}\n${last.give.amount}`;
+  };
+  for (const p of candidates) {
+    const k = qkey(p);
+    if (quotes.has(k)) continue;
+    const last = offers[p[p.length - 1]!]!;
+    quotes.set(
+      k,
+      quote(last.give.key, offers[p[0]!]!.want.key, last.give.amount).catch(() => null),
+    );
+  }
+  const answered = new Map<string, { out: bigint; fee: number } | null>();
+  for (const [k, q] of quotes) answered.set(k, await q);
+
+  for (const p of candidates) {
+    const q = answered.get(qkey(p));
+    const start = offers[p[0]!]!;
+    if (!q || q.out < start.want.amount) continue;
+    const ids = p.map((i) => offers[i]!.id);
+    const sortedKey = [...ids].sort((a, b) => a - b).join(',');
+    if (seen.has(sortedKey)) continue;
+    seen.add(sortedKey);
+    rings.push(canonicalBridged(offers, p, q));
+    if (cfg.maxRings > 0 && rings.length >= cfg.maxRings) {
+      truncate('max_rings');
+      break;
+    }
+  }
+  return { rings, stats };
+}
+
+/** Rotates a bridged path (closing hop bridged) so the smallest id comes first. */
+function canonicalBridged(offers: Offer[], path: number[], q: { out: bigint; fee: number }): Ring {
+  const n = path.length;
+  let minPos = 0;
+  for (let i = 1; i < n; i++) if (offers[path[i]!]!.id < offers[path[minPos]!]!.id) minPos = i;
+  const ids = Array.from({ length: n }, (_, i) => offers[path[(minPos + i) % n]!]!.id);
+  const hop = n - 1;
+  const from = offers[path[hop]!]!;
+  const to = offers[path[0]!]!;
+  return {
+    ids,
+    bridgedHop: (hop - minPos + n) % n,
+    bridge: {
+      fromOffer: from.id,
+      toOffer: to.id,
+      tokenIn: from.give.key,
+      tokenOut: to.want.key,
+      amountIn: from.give.amount,
+      wantMin: to.want.amount,
+      expectedOut: q.out,
+      fee: q.fee,
+    },
+  };
 }
 
 function resolve(o: FindOptions) {
@@ -325,6 +524,8 @@ function cmpBig(a: bigint, b: bigint): number {
  * the reason.
  */
 export function verifyRing(ring: Ring, offers: Map<number, Offer> | Offer[], height = 0): string | null {
+  const hop = ring.bridgedHop ?? -1;
+  if (hop !== -1 && (!Number.isInteger(hop) || hop < 0 || hop >= ring.ids.length)) return `bridged hop ${hop} out of range`;
   const byId = offers instanceof Map ? offers : new Map(offers.map((o) => [o.id, o]));
   const n = ring.ids.length;
   if (n < LIMITS.ringMinLegs || n > LIMITS.ringMaxLegs) {
@@ -351,6 +552,17 @@ export function verifyRing(ring: Ring, offers: Map<number, Offer> | Offer[], hei
   for (let i = 0; i < n; i++) {
     const give = legs[i]!.give;
     const want = legs[(i + 1) % n]!.want;
+    if (i === hop) {
+      const b = ring.bridge;
+      if (give.kind !== 'fungible' || want.kind !== 'fungible') return `hop ${i}: a swapped hop must be token to token`;
+      if (give.key === want.key) return `hop ${i}: a swapped hop needs two different tokens`;
+      if (!b || b.fromOffer !== legs[i]!.id || b.toOffer !== legs[(i + 1) % n]!.id) return `hop ${i}: no quote for this hop`;
+      if (b.tokenIn !== give.key || b.tokenOut !== want.key || b.amountIn !== give.amount || b.wantMin !== want.amount) {
+        return `hop ${i}: the quote does not match the offers`;
+      }
+      if (b.expectedOut < want.amount) return `hop ${i}: quote ${b.expectedOut} below the minimum ${want.amount}`;
+      continue;
+    }
     if (!satisfies(give, want)) {
       return `hop ${i}->${(i + 1) % n}: offer ${legs[i]!.id} gives ${describe(give)}, offer ${legs[(i + 1) % n]!.id} wants ${describe(want)}`;
     }
@@ -365,12 +577,14 @@ function describe(a: Asset): string {
 // --- Selection --------------------------------------------------------------------
 
 /**
- * Picks rings that share no offer: longest first, then the ring whose sorted
- * ids are smallest (oldest offers), then ring order.
+ * Picks rings that share no offer: longest first, then direct before
+ * bridged, then the ring whose sorted ids are smallest (oldest offers), then
+ * ring order.
  */
 export function selectRings(candidates: Ring[]): Ring[] {
   const ranked = candidates.map((r) => ({ r, sorted: [...r.ids].sort((a, b) => a - b) }));
-  ranked.sort((a, b) => b.r.ids.length - a.r.ids.length || cmpIds(a.sorted, b.sorted) || cmpIds(a.r.ids, b.r.ids));
+  const bridged = (r: Ring) => (r.bridgedHop !== undefined && r.bridgedHop >= 0 ? 1 : 0);
+  ranked.sort((a, b) => b.r.ids.length - a.r.ids.length || bridged(a.r) - bridged(b.r) || cmpIds(a.sorted, b.sorted) || cmpIds(a.r.ids, b.r.ids));
   const used = new Set<number>();
   const out: Ring[] = [];
   for (const { r } of ranked) {

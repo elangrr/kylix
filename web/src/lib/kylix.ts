@@ -15,8 +15,8 @@ import {
 } from './parse.ts';
 import type { GnoValue } from './parse.ts';
 import { GnoRpc, VmError } from './rpc.ts';
-import { findRings, selectRings } from './rings.ts';
-import type { FindOptions, Ring } from './rings.ts';
+import { findBridgedRings, findRings, selectRings } from './rings.ts';
+import type { FindOptions, Quote, Ring } from './rings.ts';
 
 export type AssetKind = 'fungible' | 'item';
 
@@ -105,7 +105,23 @@ export interface TokenInfo {
 export type ApproveRoute =
   | { kind: 'kylixdemo'; pkgPath: string; symbol: string } // Approve(symbol, spender, amount)
   | { kind: 'spender-amount'; pkgPath: string } // Approve(spender, amount), as wugnot and GNS have
-  | { kind: 'relic'; pkgPath: string }; // ApproveRelic(spender, id)
+  | { kind: 'relic'; pkgPath: string } // ApproveRelic(spender, id)
+  | { kind: 'mns'; pkgPath: string; adapter: string }; // the MNS ledger's Approve(to, name), for the nsnft adapter
+
+/** An MNS name as the nsnft adapter sees it. */
+export interface MnsName {
+  name: string;
+  /** "" when the name has no owner. */
+  owner: string;
+  /** Why the adapter would refuse to move it now, in its words; "" when it can. */
+  unmovable: string;
+}
+
+/** An MNS item id: <label>*<domain>, exactly one star, both parts non-empty. */
+export function isMnsName(id: string): boolean {
+  const i = id.indexOf('*');
+  return i > 0 && i < id.length - 1 && id.indexOf('*', i + 1) < 0;
+}
 
 // --- Parsing (pure) -------------------------------------------------------------
 
@@ -416,6 +432,21 @@ export class KylixClient {
   }
 
   /**
+   * Who holds an MNS name and whether the nsnft adapter could move it now
+   * (lease long enough, not frozen or locked). Asks the adapter, which reads
+   * the MNS ledger and registry.
+   */
+  async mnsName(name: string): Promise<MnsName> {
+    if (!isMnsName(name)) throw new ParseError('an MNS name is <label>*<domain>');
+    const q = goString(name);
+    const [owner, why] = await Promise.all([
+      this.rpc.qeval(PATHS.adapterMns, `OwnerOf(${q})`, { cacheMs: 2_000 }),
+      this.rpc.qeval(PATHS.adapterMns, `Unmovable(${q})`, { cacheMs: 2_000 }),
+    ]);
+    return { name, owner: qevalAddress(owner), unmovable: qevalString(why) };
+  }
+
+  /**
    * When the address may claim from the demo faucet again. Reads kylixdemo's
    * unexported lastClaim tree; the realm has no exported getter for it.
    */
@@ -437,7 +468,9 @@ export class KylixClient {
    */
   async approveRoute(asset: Asset): Promise<ApproveRoute | null> {
     if (asset.kind === 'item') {
-      return asset.key === this.demo ? { kind: 'relic', pkgPath: this.demo } : null;
+      if (asset.key === this.demo) return { kind: 'relic', pkgPath: this.demo };
+      if (asset.key === PATHS.adapterMns) return { kind: 'mns', pkgPath: PATHS.mnsLedger, adapter: PATHS.adapterMns };
+      return null;
     }
     const dot = asset.key.lastIndexOf('.');
     if (dot <= 0) return null;
@@ -463,13 +496,22 @@ export class KylixClient {
 
   /**
    * Rings ready to settle now: finds direct rings of 2 to 6 offers in the
-   * book, keeps those whose every offer is deliverable now, and picks a
-   * non-overlapping set (longest first, then oldest offers). Rings with a
-   * GnoSwap hop are not searched.
+   * book and, when `quote` is given (GnoSwapQuoter.quote), rings with one
+   * GnoSwap hop; keeps those whose every offer is deliverable now; and picks
+   * a non-overlapping set (longest first, direct before bridged, then oldest
+   * offers).
    */
-  async readyRings(graph?: Graph, opts: FindOptions = {}): Promise<{ graph: Graph; rings: Ring[]; status: Map<number, DeliverableStatus> }> {
+  async readyRings(
+    graph?: Graph,
+    opts: FindOptions & { quote?: Quote } = {},
+  ): Promise<{ graph: Graph; rings: Ring[]; status: Map<number, DeliverableStatus> }> {
     const g = graph ?? (await this.graph());
-    const found = findRings(g.offers, { height: g.height, collections: g.collections, ...opts });
+    const { quote, ...findOpts } = opts;
+    const found = findRings(g.offers, { height: g.height, collections: g.collections, ...findOpts });
+    if (quote) {
+      const bridged = await findBridgedRings(g.offers, quote, { height: g.height, collections: g.collections, ...findOpts, direct: found.rings });
+      found.rings.push(...bridged.rings);
+    }
     const ids = [...new Set(found.rings.flatMap((r) => r.ids))];
     const status = ids.length ? await this.deliverable(ids) : new Map<number, DeliverableStatus>();
     const ready = found.rings.filter((r) => r.ids.every((id) => status.get(id)?.deliverable === true));
