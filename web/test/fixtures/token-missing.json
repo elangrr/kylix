@@ -1,0 +1,22 @@
+{
+ "jsonrpc": "2.0",
+ "id": 1,
+ "result": {
+  "response": {
+   "ResponseBase": {
+    "Error": {
+     "@type": "/abci.StringError",
+     "value": "value method gno.land/p/nt/grc20/v0.Token.BalanceOf called using nil *Token pointer"
+    },
+    "Data": null,
+    "Events": null,
+    "Log": "--= Error =--\nData: errors.FmtError{format:\"value method gno.land/p/nt/grc20/v0.Token.BalanceOf called using nil *Token pointer\", args:[]interface {}(nil)}\nMsg Traces:\n    0  /gnoroot/tm2/pkg/errors/errors.go:103 - VM panic: value method gno.land/p/nt/grc20/v0.Token.BalanceOf called using nil *Token pointer\nStacktrace:\npanic: value method gno.land/p/nt/grc20/v0.Token.BalanceOf called using nil *Token pointer\n\n\nStack Trace:\n    0  /gnoroot/tm2/pkg/errors/errors.go:88\n    1  /gnoroot/tm2/pkg/errors/errors.go:103\n    2  /gnoroot/gno.land/pkg/sdk/vm/keeper.go:1560\n    3  /gnoroot/gno.land/pkg/sdk/vm/keeper.go:1520\n    4  /usr/local/go/src/runtime/panic.go:783\n    5  /gnoroot/gnovm/pkg/gnolang/machine.go:3373\n    6  /gnoroot/gnovm/pkg/gnolang/machine.go:1852\n... 27 more lines elided",
+    "Info": ""
+   },
+   "Key": null,
+   "Value": null,
+   "Proof": null,
+   "Height": "0"
+  }
+ }
+}

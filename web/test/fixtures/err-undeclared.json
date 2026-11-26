@@ -1,0 +1,22 @@
+{
+ "jsonrpc": "2.0",
+ "id": 1,
+ "result": {
+  "response": {
+   "ResponseBase": {
+    "Error": {
+     "@type": "/abci.StringError",
+     "value": "gno.land/r/nym-kylix000/kylix:0:0: name NoSuch not declared:\n--- preprocess stack ---\nstack 0: package gno.land/r/nym-kylix000/kylix:0:0\n------------------------"
+    },
+    "Data": null,
+    "Events": null,
+    "Log": "--= Error =--\nData: &errors.errorString{s:\"gno.land/r/nym-kylix000/kylix:0:0: name NoSuch not declared:\\n--- preprocess stack ---\\nstack 0: package gno.land/r/nym-kylix000/kylix:0:0\\n------------------------\"}\nMsg Traces:\n    0  /gnoroot/tm2/pkg/errors/errors.go:103 - VM panic: gno.land/r/nym-kylix000/kylix:0:0: name NoSuch not declared:\n--- preprocess stack ---\nstack 0: package gno.land/r/nym-kylix000/kylix:0:0\n------------------------\nStacktrace:\n\n\nStack Trace:\n    0  /gnoroot/tm2/pkg/errors/errors.go:93\n    1  /gnoroot/tm2/pkg/errors/errors.go:103\n    2  /gnoroot/gno.land/pkg/sdk/vm/keeper.go:1571\n    3  /gnoroot/gno.land/pkg/sdk/vm/keeper.go:1520\n    4  /usr/local/go/src/runtime/panic.go:783\n... 29 more lines elided",
+    "Info": ""
+   },
+   "Key": null,
+   "Value": null,
+   "Proof": null,
+   "Height": "0"
+  }
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "jsonrpc": "2.0",
+ "id": 1,
+ "result": {
+  "response": {
+   "ResponseBase": {
+    "Error": null,
+    "Data": "KCJ7XCJoZWlnaHRcIjoxNDI0NTY4LFwib2ZmZXJzXCI6W3tcImlkXCI6NCxcImRlbGl2ZXJhYmxlXCI6dHJ1ZSxcInJlYXNvblwiOlwiXCJ9LHtcImlkXCI6NSxcImRlbGl2ZXJhYmxlXCI6dHJ1ZSxcInJlYXNvblwiOlwiXCJ9LHtcImlkXCI6NixcImRlbGl2ZXJhYmxlXCI6dHJ1ZSxcInJlYXNvblwiOlwiXCJ9LHtcImlkXCI6OTk5LFwiZGVsaXZlcmFibGVcIjpmYWxzZSxcInJlYXNvblwiOlwibm90IG9wZW5cIn1dfSIgc3RyaW5nKQ==",
+    "Events": null,
+    "Log": "",
+    "Info": ""
+   },
+   "Key": null,
+   "Value": null,
+   "Proof": null,
+   "Height": "0"
+  }
+ }
+}

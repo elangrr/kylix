@@ -1,0 +1,61 @@
+[
+ {
+  "FuncName": "BalanceOf",
+  "Params": [
+   {
+    "Name": "owner",
+    "Type": "string",
+    "Value": ""
+   }
+  ],
+  "Results": [
+   {
+    "Name": ".res.0",
+    "Type": "int64",
+    "Value": ""
+   }
+  ]
+ },
+ {
+  "FuncName": "Transfer",
+  "Params": [
+   {
+    "Name": "cur",
+    "Type": "interface {.seal func(); Address func() .uverse.address; IsCode func() bool; IsCurrent func() bool; IsEphemeral func() bool; IsUser func() bool; IsUserCall func() bool; IsUserRun func() bool; PkgPath func() string; Previous func() .uverse.realm; String func() string; Sub func(string) .uverse.realm; Subpath func() string}",
+    "Value": ""
+   },
+   {
+    "Name": "to",
+    "Type": "string",
+    "Value": ""
+   },
+   {
+    "Name": "amount",
+    "Type": "int64",
+    "Value": ""
+   }
+  ],
+  "Results": null
+ },
+ {
+  "FuncName": "Approve",
+  "Params": [
+   {
+    "Name": "cur",
+    "Type": "interface {.seal func(); Address func() .uverse.address; IsCode func() bool; IsCurrent func() bool; IsEphemeral func() bool; IsUser func() bool; IsUserCall func() bool; IsUserRun func() bool; PkgPath func() string; Previous func() .uverse.realm; String func() string; Sub func(string) .uverse.realm; Subpath func() string}",
+    "Value": ""
+   },
+   {
+    "Name": "spender",
+    "Type": "string",
+    "Value": ""
+   },
+   {
+    "Name": "amount",
+    "Type": "int64",
+    "Value": ""
+   }
+  ],
+  "Results": null
+ }
+]

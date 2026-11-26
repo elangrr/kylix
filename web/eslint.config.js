@@ -17,6 +17,12 @@ export default tseslint.config(
     },
   },
   {
+    // The chain library and its tests index arrays after checking bounds, and
+    // noUncheckedIndexedAccess cannot see those checks.
+    files: ['src/lib/**/*.ts', 'test/**/*.ts'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
+  },
+  {
     files: ['scripts/**/*.mjs', 'eslint.config.js'],
     extends: [js.configs.recommended],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },

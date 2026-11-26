@@ -1,0 +1,19 @@
+{
+ "jsonrpc": "2.0",
+ "id": 1,
+ "result": {
+  "response": {
+   "ResponseBase": {
+    "Error": null,
+    "Data": "KCJ7XCJjb2xsZWN0aW9uc1wiOlt7XCJrZXlcIjpcImduby5sYW5kL3IvbnltLWt5bGl4MDAwL2FkYXB0ZXJzL25zbmZ0XCIsXCJuYW1lXCI6XCJNTlMgTmFtZXMgKHYyKVwiLFwiYWRhcHRlclwiOnRydWUsXCJ0YXJnZXRcIjpcImduby5sYW5kL3IvbnltLW1uc3JlaGVhcnNhbDAwMS9uc25mdC92MlwiLFwib2ZmaWNpYWxcIjp0cnVlLFwibGFiZWxcIjpcIm9mZmljaWFsIGFkYXB0ZXJcIixcImFwcHJvdmFsQ2hlY2tcIjp0cnVlfSx7XCJrZXlcIjpcImduby5sYW5kL3IvbnltLWt5bGl4MDAwL2FkYXB0ZXJzL3Npbm9waWEzXCIsXCJuYW1lXCI6XCJTaW5vcGlhMyBBcnRcIixcImFkYXB0ZXJcIjp0cnVlLFwidGFyZ2V0XCI6XCJnbm8ubGFuZC9yL2cxano2ajloajZyZGY1bHRsMmtjcnBhNGp3dGRoM3czMHoweXVsMDYvc2lub3BpYTMvY29yZVwiLFwib2ZmaWNpYWxcIjp0cnVlLFwibGFiZWxcIjpcIm9mZmljaWFsIGFkYXB0ZXJcIixcImFwcHJvdmFsQ2hlY2tcIjp0cnVlfSx7XCJrZXlcIjpcImduby5sYW5kL3IvbnltLWt5bGl4MDAwL2t5bGl4ZGVtb1wiLFwibmFtZVwiOlwiS3lsaXggUmVsaWNzXCIsXCJhZGFwdGVyXCI6ZmFsc2UsXCJ0YXJnZXRcIjpcIlwiLFwib2ZmaWNpYWxcIjp0cnVlLFwibGFiZWxcIjpcIm9mZmljaWFsIGNvbGxlY3Rpb25cIixcImFwcHJvdmFsQ2hlY2tcIjp0cnVlfV0sXCJjb2xsZWN0aW9uc0hhc01vcmVcIjpmYWxzZSxcImNvbGxlY3Rpb25zTmV4dFwiOlwiXCJ9IiBzdHJpbmcp",
+    "Events": null,
+    "Log": "",
+    "Info": ""
+   },
+   "Key": null,
+   "Value": null,
+   "Proof": null,
+   "Height": "0"
+  }
+ }
+}
