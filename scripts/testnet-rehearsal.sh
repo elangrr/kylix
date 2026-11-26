@@ -702,7 +702,9 @@ step_notify() {
   say "  gnotif triggers for $K before: \"${active}\""
   # Opening the handle and storing the trigger costs about 16.2 KB in gnotif
   # (1.62 GNOT, measured on gnodev), so these two calls get a 3 GNOT cap.
-  if qeval "gno.land/r/sys/names.IsEnabled()" | grep -q '(true bool)'; then
+  if [ -n "$active" ]; then
+    skip "notifications are already enabled, so gnotif answers \"already holds a handle\" before it checks the caller: the non-owner refusal shows only on the first run"
+  elif qeval "gno.land/r/sys/names.IsEnabled()" | grep -q '(true bool)'; then
     DEPW=3000000ugnot tx_refused "not authorized for namespace" notify-nonowner "$KEY_ANA" "$K" EnableNotifications
   else
     skip "r/sys/names is disabled on this chain, so every key may act for every namespace: the non-owner refusal can only be seen where it is enabled (onyx-1)"

@@ -383,9 +383,9 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 
 	for _, r := range selected {
-		// Gas limit sized to the ring: 25M, plus 5M per token offer, 14M per
-		// item offer and 50M for a GnoSwap hop. The ring page uses 14M per MNS
-		// name and 8M per other item; the solver uses 14M for every item. An
+		// Gas limit sized to the ring: 25M, plus 5M per token offer, 25M per
+		// item offer and 150M for a GnoSwap hop. The ring page uses 25M per MNS
+		// name and 8M per other item; the solver uses 25M for every item. An
 		// explicit --gas-wanted or --bridge-gas-wanted overrides it.
 		gasWanted := ringGasWanted(byID, r)
 		if cfg.gasWanted > 0 {
@@ -908,7 +908,8 @@ func isSafeShortReason(s string) bool {
 }
 
 // ringGasWanted sizes the gas limit to the ring: 25M, plus 5M per token
-// offer, 14M per item offer, and 50M for a GnoSwap hop. Kept in step with the
+// offer, 25M per item offer, and 150M for a GnoSwap hop (on onyx-1 a real
+// 2-offer swap ring used 146M, and a token and an MNS name 44M). Kept in step with the
 // ring page by hand. Measured settlements on a local chain used 24M (two
 // tokens) to 60M (six items); the formula leaves headroom over each. The fee
 // is a flat amount tied to this limit, so an oversized limit eats the
@@ -917,13 +918,13 @@ func ringGasWanted(byID map[uint64]ring.Offer, r ring.Ring) int64 {
 	gas := int64(25_000_000)
 	for _, id := range r.IDs {
 		if o, ok := byID[id]; ok && o.Give.Kind == ring.KindItem {
-			gas += 14_000_000
+			gas += 25_000_000
 		} else {
 			gas += 5_000_000
 		}
 	}
 	if r.IsBridged() {
-		gas += 50_000_000
+		gas += 150_000_000
 	}
 	return gas
 }

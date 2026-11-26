@@ -344,12 +344,15 @@ func renderRing(rawIDs string) string {
 }
 
 // settleGasWanted sizes a settle command's gas limit to the ring: 25M, plus
-// 5M per token offer, 14M per MNS name (the adapter reads the registry), 8M
-// per other item, and 50M for a GnoSwap hop. Measured on a local chain
+// 5M per token offer, 25M per MNS name (the adapter reads the registry), 8M
+// per other item, and 150M for a GnoSwap hop. Measured on a local chain
 // (gno v1.8.0): 2 token offers used 24 to 29M gas, a token and a relic 30M,
 // a token and an MNS name 37M, 6 token offers 39M, 3 relics and 3 tokens
-// 59M, 6 items 52 to 60M (6 Sinopia3 tokens 53M in a filetest); a real
-// GnoSwap swap alone used about 34M. Third-party collection code may use
+// 59M, 6 items 52 to 60M (6 Sinopia3 tokens 53M in a filetest); on the
+// onyx-1 testnet a 2-offer ring with a real GnoSwap swap used 146M (the
+// swap alone about 118M; a test run of GnoSwap's source had suggested 34M),
+// and a token and an MNS name used 44M there, against 37M locally.
+// Third-party collection code may use
 // more; the simulation then fails without charging a fee. The solver is
 // meant to print the same limits.
 func settleGasWanted(offs []*Offer, bridged bool) int64 {
@@ -360,13 +363,13 @@ func settleGasWanted(offs []*Offer, bridged bool) int64 {
 		case o.Give.Kind != ring.Item:
 			g += 5_000_000
 		case o.Give.Key == mns:
-			g += 14_000_000
+			g += 25_000_000
 		default:
 			g += 8_000_000
 		}
 	}
 	if bridged {
-		g += 50_000_000
+		g += 150_000_000
 	}
 	return g
 }

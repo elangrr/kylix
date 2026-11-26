@@ -648,7 +648,7 @@ func TestReview4_MayBeIncompleteForEveryBoundAndAbsentOnCleanBook(t *testing.T) 
 	})
 }
 
-// Review 4 (R4-6): Verify ringGasWanted uses 25M + 5M/token + 14M/item + 50M/GnoSwap hop.
+// Review 4 (R4-6): Verify ringGasWanted uses 25M + 5M/token + 25M/item + 150M/GnoSwap hop.
 func TestReview4_RingGasWantedFormula(t *testing.T) {
 	const (
 		tokA = "gno.land/r/gnoland/wugnot.wugnot"
@@ -675,17 +675,17 @@ func TestReview4_RingGasWantedFormula(t *testing.T) {
 		{
 			name: "2-item direct",
 			r:    ring.Ring{IDs: []uint64{3, 4}, BridgedHop: ring.NoBridge},
-			want: 53_000_000, // 25M + 2*14M
+			want: 75_000_000, // 25M + 2*25M
 		},
 		{
 			name: "2-token bridged",
 			r:    ring.Ring{IDs: []uint64{1, 2}, BridgedHop: 0},
-			want: 85_000_000, // 25M + 2*5M + 50M
+			want: 185_000_000, // 25M + 2*5M + 150M
 		},
 		{
 			name: "token+item bridged",
 			r:    ring.Ring{IDs: []uint64{1, 3}, BridgedHop: 0},
-			want: 94_000_000, // 25M + 5M + 14M + 50M
+			want: 205_000_000, // 25M + 5M + 25M + 150M
 		},
 	}
 

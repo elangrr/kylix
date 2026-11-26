@@ -402,7 +402,7 @@ func TestCLI_LiveFakeRPCWithMultiPoolBridgedRingAndDeliverableRetry(t *testing.T
 	if !strings.Contains(sel.GnokeyCommand, "-func SettleRingVia -args '1,2' -args '3000'") {
 		t.Fatalf("expected SettleRingVia with fee arg in gnokey command: %s", sel.GnokeyCommand)
 	}
-	if !strings.Contains(sel.GnokeyCommand, "-gas-wanted 94000000") {
+	if !strings.Contains(sel.GnokeyCommand, "-gas-wanted 205000000") {
 		t.Fatalf("expected bridged gas-wanted in gnokey command: %s", sel.GnokeyCommand)
 	}
 	if !strings.Contains(sel.GnokeyCommand, "-max-deposit '600000ugnot'") {

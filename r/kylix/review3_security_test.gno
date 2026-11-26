@@ -196,9 +196,9 @@ func TestSettleGasWanted(t *testing.T) {
 	uassert.Equal(t, int64(35_000_000), settleGasWanted([]*Offer{tok, tok}, false))
 	uassert.Equal(t, int64(43_000_000), settleGasWanted([]*Offer{tok, item, tok}, false))
 	uassert.Equal(t, int64(55_000_000), settleGasWanted([]*Offer{tok, tok, tok, tok, tok, tok}, false))
-	uassert.Equal(t, int64(93_000_000), settleGasWanted([]*Offer{tok, item, tok}, true))
+	uassert.Equal(t, int64(193_000_000), settleGasWanted([]*Offer{tok, item, tok}, true))
 	mns := &Offer{Give: ring.Asset{Kind: ring.Item, Key: namespacePrefix() + "adapters/nsnft", ID: "a*b"}}
-	uassert.Equal(t, int64(44_000_000), settleGasWanted([]*Offer{tok, mns}, false))
+	uassert.Equal(t, int64(55_000_000), settleGasWanted([]*Offer{tok, mns}, false))
 	uassert.Equal(t, int64(73_000_000), settleGasWanted([]*Offer{item, item, item, item, item, item}, false))
 }
 
